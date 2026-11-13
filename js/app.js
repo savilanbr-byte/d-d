@@ -853,7 +853,7 @@ function formEntrada() {
       <div><label class="etq" for="ent-dicho">Lo dijeron, puede ser falso (uno por línea)</label><textarea class="campo" id="ent-dicho" data-borrador style="min-height:70px">${val('ent-dicho')}</textarea></div>
       <div><label class="etq" for="ent-misterio">Por descubrir</label><input class="campo" style="width:100%" id="ent-misterio" data-borrador value="${val('ent-misterio')}"></div>
       <div><label class="etq" for="ent-img">Imagen</label><select class="campo" style="width:100%" id="ent-img" data-borrador>${opcionesImg(ui.borradores['ent-img'] || '')}</select></div>`}
-      <label class="check"><input type="checkbox" id="ent-oculto" data-borrador-check${ui.borradores['ent-oculto'] ? ' checked' : ''}> Solo la ve el DM (oculta en Historia)</label>
+      <label class="check"><input type="checkbox" id="ent-oculto" data-borrador-check${ui.borradores['ent-oculto'] ? ' checked' : ''}> Sin revelar (solo la ve el DM)</label>
       <div class="fila"><button type="button" class="btn btn-oro" data-accion="ent-guardar">${ed ? 'Guardar cambios' : 'Añadir a la Historia'}</button>${ed || ui.borradores['ent-titulo'] ? '<button type="button" class="btn" data-accion="ent-cancelar">Cancelar</button>' : ''}</div>
     </div>
   </section>`;
@@ -900,10 +900,16 @@ function dmBiblioteca() {
       ${formEntrada()}
       <section class="panel">
         <h2 class="panel-titulo">Entradas de la Historia</h2>
+        <div class="fila" style="margin-bottom:6px">
+          <label class="btn btn-peq" for="imp-historia">Importar entradas</label><input type="file" id="imp-historia" class="sr" accept=".json,application/json" data-cambio="importar-historia">
+          ${Object.values(enc).some((x) => Object.keys(x || {}).length) ? '<button type="button" class="btn btn-peq" data-accion="exportar-historia">Exportar entradas</button>' : ''}
+        </div>
+        <p class="tenue" style="font-size:14px;margin:0">Las entradas importadas llegan sin revelar. Revélalas cuando el grupo las descubra.</p>
         ${Object.entries(CATEGORIAS).map(([cat, c]) => `<p class="sub" style="margin-top:10px">${esc(c.nombre)}</p>
           <ul class="lista entradas">${porOrden(enc[cat]).map(([id, x]) => `<li class="${x.oculto ? 'oculta' : ''}">
-            <span>${esc(x.titulo)}${x.oculto ? ' <span class="tenue">(oculta)</span>' : ''}${cat === 'misterios' && x.resuelto ? ' <span class="chip resuelto">Resuelto</span>' : ''}</span>
+            <span>${esc(x.titulo)}${x.oculto ? ' <span class="tenue">(sin revelar)</span>' : ''}${cat === 'misterios' && x.resuelto ? ' <span class="chip resuelto">Resuelto</span>' : ''}${!x.img && x.imgPendiente ? ` <span class="tenue" style="font-size:13px">· espera la imagen «${esc(x.imgPendiente)}»</span>` : ''}</span>
             <span class="fila" style="flex:none">
+              <button type="button" class="btn btn-peq${x.oculto ? ' btn-oro' : ''}" data-accion="ent-revelar" data-cat="${cat}" data-id="${esc(id)}">${x.oculto ? 'Revelar' : 'Ocultar'}</button>
               <button type="button" class="btn btn-peq" data-accion="ent-editar" data-cat="${cat}" data-id="${esc(id)}">Editar</button>
               ${botonConfirmar(`borrar-ent-${cat}-${id}`, 'Borrar', 'ent-borrar', `data-cat="${cat}" data-id="${esc(id)}"`, 'btn btn-peq btn-peligro')}
             </span></li>`).join('') || '<li class="tenue">Ninguna.</li>'}</ul>`).join('')}
@@ -1341,7 +1347,13 @@ const ACCIONES = {
     try {
       const src = await comprimir(file, tipo);
       const visible = $('#sub-visible') ? $('#sub-visible').checked : false;
-      await sync.escribir({ [`imagenes/${nuevoId('im')}`]: { nombre, tipo, src, visible } });
+      const imId = nuevoId('im');
+      const u = { [`imagenes/${imId}`]: { nombre, tipo, src, visible } };
+      // Entradas importadas que esperaban una imagen con este nombre
+      let enlazadas = 0;
+      for (const [cat, lista] of Object.entries(E.enciclopedia || {})) for (const [id, x] of Object.entries(lista || {})) if (!x.img && x.imgPendiente && norm(x.imgPendiente) === norm(nombre)) { u[`enciclopedia/${cat}/${id}/img`] = imId; u[`enciclopedia/${cat}/${id}/imgPendiente`] = null; enlazadas++; }
+      await sync.escribir(u);
+      if (enlazadas) setTimeout(() => aviso(`Se asignó a ${enlazadas} entrada${enlazadas === 1 ? '' : 's'} de la Historia`), 2700);
       delete ui.borradores['sub-nombre'];
       const a = $('#sub-archivo'); if (a) a.value = '';
       aviso(`«${nombre}» quedó en la Biblioteca`); avisarEspacio();
@@ -1378,11 +1390,14 @@ const ACCIONES = {
       ? { titulo, resuelto: !!g('ent-resuelto'), oculto: !!g('ent-oculto') }
       : { titulo, sub: g('ent-sub'), texto: g('ent-texto'), visto: lineas(g('ent-visto')), dicho: lineas(g('ent-dicho')), misterio: g('ent-misterio'), img: g('ent-img'), oculto: !!g('ent-oculto'), ...(cat === 'mundo' ? { tipo: g('ent-tipo') || 'hecho' } : {}) };
     entrada.orden = previo ? (previo.orden || Date.now()) : Date.now();
+    if (previo && previo.imgPendiente && !entrada.img && cat !== 'misterios') entrada.imgPendiente = previo.imgPendiente;
     const id = ui.editandoEnt ? ui.editandoEnt.id : nuevoId(cat.slice(0, 2));
     sync.escribir({ [`enciclopedia/${cat}/${id}`]: entrada });
     limpiar('ent-', ['ent-cat']); ui.editandoEnt = null;
     aviso(previo ? 'Entrada actualizada' : `Añadido a ${CATEGORIAS[cat].nombre}`);
   },
+  'ent-revelar'(d) { const x = ((E.enciclopedia || {})[d.cat] || {})[d.id]; if (x) sync.escribir({ [`enciclopedia/${d.cat}/${d.id}/oculto`]: !x.oculto }); },
+  'exportar-historia'() { exportarHistoria(); },
   'ent-borrar'(d) { ui.confirmar = null; if (ui.editandoEnt && ui.editandoEnt.id === d.id) { limpiar('ent-', ['ent-cat']); ui.editandoEnt = null; } sync.escribir({ [`enciclopedia/${d.cat}/${d.id}`]: null }); aviso('Entrada borrada'); },
 
   /* DM: ajustes */
@@ -1437,17 +1452,82 @@ async function importarFichas(file) {
   avisarEspacio();
   aviso(`Importados: ${creados.join(', ')}${saltados.length ? `. Ya existían: ${saltados.join(', ')}` : ''}${pinesNuevos.length ? '. Revisa sus PIN en cada tarjeta.' : ''}`);
 }
-function exportarFichas() {
-  const personajes = listaPj().map(([id, p]) => ({ ficha: p.ficha, estado: p.estado || {}, secretos: secretosDe(id), retratoSrc: srcDe(p.ficha.retrato) || undefined }));
-  const texto = JSON.stringify({ formato: FORMATO, version: 1, campana: (E.campana || {}).nombre || '', personajes }, null, 2);
+function descargar(nombre, texto) {
   try {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([texto], { type: 'application/json' }));
-    a.download = `personajes-${norm((E.campana || {}).nombre || 'campana').replace(/[^a-z0-9]+/g, '-')}.json`;
+    a.download = nombre;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-    aviso('Fichas exportadas');
-  } catch (e) { aviso('Este navegador no dejó descargar el archivo'); }
+    return true;
+  } catch (e) { aviso('Este navegador no dejó descargar el archivo'); return false; }
+}
+const slugCampana = () => norm((E.campana || {}).nombre || 'campana').replace(/[^a-z0-9]+/g, '-');
+
+// Entradas de Historia en lote
+const FORMATO_HISTORIA = 'mesa-del-dm/historia';
+const SECCIONES_ALIAS = { mundo: 'mundo', 'el mundo': 'mundo', pnj: 'pnj', npc: 'pnj', npcs: 'pnj', personaje: 'pnj', personajes: 'pnj', 'personajes no jugadores': 'pnj', 'personaje no jugador': 'pnj', lugar: 'lugares', lugares: 'lugares', objeto: 'objetos', objetos: 'objetos', inscripcion: 'inscripciones', inscripciones: 'inscripciones', misterio: 'misterios', misterios: 'misterios' };
+const comoLista = (v) => (Array.isArray(v) ? v.map((x) => String(x).trim()).filter(Boolean) : lineas(v));
+const primero = (o, ...ks) => { for (const k of ks) if (o[k] != null && o[k] !== '') return o[k]; return ''; };
+
+async function importarHistoria(file) {
+  let datos;
+  try { datos = JSON.parse(await file.text()); } catch (e) { aviso('Ese archivo no es un JSON válido'); return; }
+  let lista = [];
+  if (Array.isArray(datos)) lista = datos;
+  else if (datos && Array.isArray(datos.entradas)) lista = datos.entradas;
+  else if (datos && typeof datos === 'object') for (const [k, v] of Object.entries(datos)) if (Array.isArray(v) && SECCIONES_ALIAS[norm(k)]) lista.push(...v.map((x) => ({ seccion: k, ...x })));
+  if (!lista.length) { aviso('El archivo no trae entradas'); return; }
+  const enc = E.enciclopedia || {};
+  const u = {}; let nuevas = 0, actualizadas = 0, conImagen = 0, pendientes = 0; const malas = [];
+  const imagenPorNombre = (n) => (Object.entries(imgs()).find(([, i]) => i.tipo !== 'mapa' && norm(i.nombre) === norm(n)) || [])[0] || '';
+  lista.forEach((x, i) => {
+    const cat = SECCIONES_ALIAS[norm(x.seccion || x.section || x.categoria || '')];
+    const titulo = String(primero(x, 'titulo', 'nombre', 'title', 'texto_inscripcion')).trim();
+    if (!cat || !titulo) { malas.push(titulo || `fila ${i + 1}`); return; }
+    const nombreImg = String(primero(x, 'imagen', 'image', 'img')).trim();
+    const img = nombreImg ? imagenPorNombre(nombreImg) : '';
+    const ent = cat === 'misterios'
+      ? { titulo, resuelto: !!x.resuelto }
+      : { titulo, sub: String(primero(x, 'sub', 'subtitulo', 'rol', 'estado', 'lugar', 'detalle')), texto: String(primero(x, 'texto', 'descripcion', 'description')), visto: comoLista(x.visto || x.vimos || []), dicho: comoLista(x.dicho || x.dijeron || []), misterio: String(primero(x, 'misterio', 'por_descubrir', 'porDescubrir')), ...(cat === 'mundo' ? { tipo: ['hecho', 'dicho', 'misterio'].includes(x.tipo) ? x.tipo : 'hecho' } : {}) };
+    if (cat !== 'misterios') { if (img) { ent.img = img; conImagen++; } else if (nombreImg) { ent.imgPendiente = nombreImg; pendientes++; } }
+    const revelada = x.revelada === true || x.oculto === false;
+    const existe = Object.entries(enc[cat] || {}).find(([, y]) => norm(y.titulo) === norm(titulo));
+    if (existe) {
+      const [id, prev] = existe;
+      u[`enciclopedia/${cat}/${id}`] = { ...prev, ...ent, img: ent.img || prev.img || '', oculto: revelada ? false : !!prev.oculto, orden: prev.orden || Date.now() + i };
+      if (!ent.imgPendiente && !prev.img && prev.imgPendiente) u[`enciclopedia/${cat}/${id}`].imgPendiente = prev.imgPendiente;
+      actualizadas++;
+    } else {
+      u[`enciclopedia/${cat}/${nuevoId(cat.slice(0, 2))}`] = { img: '', ...ent, oculto: !revelada, orden: Date.now() + i };
+      nuevas++;
+    }
+  });
+  if (!nuevas && !actualizadas) { aviso('No se reconoció ninguna entrada. Revisa la «seccion» y el «titulo» de cada una.'); return; }
+  await sync.escribir(u);
+  const partes = [`${nuevas} nueva${nuevas === 1 ? '' : 's'}`];
+  if (actualizadas) partes.push(`${actualizadas} actualizada${actualizadas === 1 ? '' : 's'}`);
+  if (pendientes) partes.push(`${pendientes} esperando imagen`);
+  if (malas.length) partes.push(`${malas.length} sin sección o título`);
+  aviso(`Entradas importadas: ${partes.join(', ')}`);
+}
+
+function exportarHistoria() {
+  const entradas = [];
+  for (const cat of Object.keys(CATEGORIAS)) for (const [, x] of porOrden((E.enciclopedia || {})[cat])) {
+    const e = { seccion: cat, titulo: x.titulo };
+    if (cat === 'misterios') e.resuelto = !!x.resuelto;
+    else Object.assign(e, { sub: x.sub || '', texto: x.texto || '', visto: x.visto || [], dicho: x.dicho || [], misterio: x.misterio || '', imagen: (imgs()[x.img] || {}).nombre || x.imgPendiente || '', ...(cat === 'mundo' ? { tipo: x.tipo || 'hecho' } : {}) });
+    e.revelada = !x.oculto;
+    entradas.push(e);
+  }
+  if (descargar(`historia-${slugCampana()}.json`, JSON.stringify({ formato: FORMATO_HISTORIA, version: 1, entradas }, null, 2))) aviso('Entradas exportadas');
+}
+
+function exportarFichas() {
+  const personajes = listaPj().map(([id, p]) => ({ ficha: p.ficha, estado: p.estado || {}, secretos: secretosDe(id), retratoSrc: srcDe(p.ficha.retrato) || undefined }));
+  const texto = JSON.stringify({ formato: FORMATO, version: 1, campana: (E.campana || {}).nombre || '', personajes }, null, 2);
+  if (descargar(`personajes-${slugCampana()}.json`, texto)) aviso('Fichas exportadas');
 }
 
 const CAMBIOS = {
@@ -1455,6 +1535,7 @@ const CAMBIOS = {
   ini(t) { const v = parseInt(t.value, 10); sync.escribir({ [`combate/participantes/${t.dataset.pid}/ini`]: Number.isFinite(v) ? v : '' }); },
   amb(t) { sync.escribir({ [`ambiente/${t.dataset.campo}`]: t.value }); },
   async importar(t) { const f = t.files && t.files[0]; t.value = ''; if (f) await importarFichas(f); },
+  async 'importar-historia'(t) { const f = t.files && t.files[0]; t.value = ''; if (f) await importarHistoria(f); },
 };
 
 // Ejecuta una acción y vuelve a dibujar al final, para que los formularios se limpien

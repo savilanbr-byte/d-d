@@ -20,7 +20,7 @@ Dirección de la app: https://savilanbr-byte.github.io/d-d/
 | **Historia** | Enciclopedia de la campaña (mundo, personajes no jugadores, lugares, objetos, inscripciones, misterios), galería con las imágenes que el DM ya reveló, pistas del grupo y el diario de cada jugador (lo ven solo él y el DM; el DM ve todos los diarios). |
 | **DM → Mesa** | Combate (preparar iniciativa, tirar d20 para enemigos, siguiente turno, rondas), ambiente, relojes, enemigos y aliados en escena, pistas del grupo, mapa y fichas, escena y descansos. |
 | **DM → Personajes** | Crear, editar y borrar fichas, ver cualquier ficha, mandar pistas privadas, anotar secretos del DM (no los ve el jugador) e importar o exportar fichas en un archivo `.json`. |
-| **DM → Biblioteca** | Subir imágenes (llegan sin revelar), revelarlas en la Galería o mostrarlas en la mesa (eso también las revela) y llenar la Historia. |
+| **DM → Biblioteca** | Subir imágenes (llegan sin revelar), revelarlas en la Galería o mostrarlas en la mesa (eso también las revela), llenar la Historia una por una o importando un archivo, y revelar cada entrada cuando el grupo la descubra. |
 | **DM → Ajustes** | Nombre de la campaña, PIN del DM, PINs de los personajes y borrar la campaña. |
 
 ## Creador de personajes: formato de las listas
@@ -54,6 +54,28 @@ En **DM → Personajes → Importar fichas** se carga un archivo `.json` con est
 ```
 
 **Exportar fichas** descarga ese mismo archivo con todos los personajes (incluye retratos y secretos), útil como respaldo.
+
+## Importar entradas de Historia
+
+En **DM → Biblioteca → Importar entradas** se carga un `.json` con muchas entradas a la vez. Llegan **sin revelar**, salvo las que digan `"revelada": true`. Si una entrada ya existe (misma sección y título), se actualiza en vez de duplicarse.
+
+- `seccion`: `mundo`, `pnj`, `lugares`, `objetos`, `inscripciones` o `misterios`.
+- `titulo` es obligatorio; lo demás es opcional: `sub`, `texto`, `visto` y `dicho` (listas), `misterio`, `tipo` (solo en mundo: `hecho`, `dicho` o `misterio`), `resuelto` (solo en misterios).
+- `imagen`: el nombre de una imagen de la Biblioteca. Si todavía no existe, la entrada la espera y se le asigna sola cuando subas una imagen con ese nombre.
+
+```json
+{
+  "formato": "mesa-del-dm/historia",
+  "version": 1,
+  "entradas": [
+    { "seccion": "pnj", "titulo": "Brolgar", "sub": "Herrero de la aldea", "texto": "Enano tuerto.",
+      "visto": ["Tiene una cicatriz de quemadura"], "dicho": ["Dice que conoció al rey"], "imagen": "Brolgar" },
+    { "seccion": "misterios", "titulo": "¿Quién apagó el faro?" }
+  ]
+}
+```
+
+**Exportar entradas** descarga ese mismo archivo con todo lo que hay en la Historia.
 
 ## Archivos
 
