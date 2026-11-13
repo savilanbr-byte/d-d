@@ -1,15 +1,15 @@
 // Sincronización del estado compartido.
 // Modo demostración: localStorage + BroadcastChannel (pestañas del mismo dispositivo).
 // Modo en vivo: Firebase Realtime Database (todos los dispositivos).
-import { ESTADO_INICIAL } from './datos.js';
+import { ESTADO_VACIO, VERSION } from './datos.js';
 import { FIREBASE_CONFIG, PARTIDA_ID } from '../config.js';
 
-const CLAVE = 'mf-estado-' + PARTIDA_ID;
+const CLAVE = 'mesa-estado-' + PARTIDA_ID;
 const VERSION_FB = '10.12.2';
 
 export const clonar = (o) => JSON.parse(JSON.stringify(o));
 
-// Aplica actualizaciones con rutas tipo "personajes/cayo/pv" (null borra), igual que Firebase.
+// Aplica actualizaciones con rutas tipo "personajes/abc/estado/pv" (null borra), igual que Firebase.
 export function aplicarRutas(obj, updates) {
   for (const [ruta, valor] of Object.entries(updates)) {
     const partes = ruta.split('/');
@@ -28,16 +28,19 @@ export function aplicarRutas(obj, updates) {
 // Firebase no acepta . # $ [ ] / en las claves
 export const claveSegura = (t) => String(t).replace(/[.#$\[\]\/]/g, '').trim().slice(0, 80) || 'x';
 
-// Vuelve a la partida guardada, pero conserva las imágenes subidas desde la Biblioteca
-function reinicio(actual) {
-  const nuevo = clonar(ESTADO_INICIAL);
-  for (const [k, i] of Object.entries((actual && actual.imagenes) || {})) if (!i.base) nuevo.imagenes[k] = i;
-  nuevo.actualizado = Date.now();
-  return nuevo;
+// Completa lo que Firebase no guarda (objetos vacíos) para que la app siempre encuentre la estructura
+function completar(e) {
+  const base = clonar(ESTADO_VACIO);
+  const r = { ...base, ...(e || {}) };
+  for (const k of Object.keys(base)) if (typeof base[k] === 'object' && !Array.isArray(base[k])) r[k] = { ...base[k], ...((e || {})[k] || {}) };
+  return r;
 }
 
+// Limpia los datos que dejaron versiones anteriores de la app en este navegador
+try { for (const k of Object.keys(localStorage)) if (k.startsWith('mf-')) localStorage.removeItem(k); } catch (e) { /* sin almacenamiento */ }
+
 class Base {
-  constructor() { this.oyentes = new Set(); this.estado = clonar(ESTADO_INICIAL); }
+  constructor() { this.oyentes = new Set(); this.estado = completar(); }
   on(fn) { this.oyentes.add(fn); return () => this.oyentes.delete(fn); }
   emitir() { for (const fn of this.oyentes) fn(this.estado); }
 }
@@ -50,15 +53,14 @@ class SyncLocal extends Base {
     try {
       const g = localStorage.getItem(CLAVE);
       const guardado = g && JSON.parse(g);
-      // Si cambió la versión de los datos iniciales, se empieza de nuevo
-      if (guardado && guardado.version === ESTADO_INICIAL.version) this.estado = guardado;
+      if (guardado && guardado.version === VERSION) this.estado = completar(guardado);
     } catch (e) { /* sin almacenamiento */ }
     try {
       this.canal = new BroadcastChannel(CLAVE);
-      this.canal.onmessage = (e) => { this.estado = e.data; this.emitir(); };
+      this.canal.onmessage = (e) => { this.estado = completar(e.data); this.emitir(); };
     } catch (e) {
       window.addEventListener('storage', (e) => {
-        if (e.key === CLAVE && e.newValue) { this.estado = JSON.parse(e.newValue); this.emitir(); }
+        if (e.key === CLAVE && e.newValue) { this.estado = completar(JSON.parse(e.newValue)); this.emitir(); }
       });
     }
   }
@@ -72,7 +74,7 @@ class SyncLocal extends Base {
     aplicarRutas(this.estado, { ...updates, actualizado: Date.now() });
     this.publicar();
   }
-  async reiniciar() { this.estado = reinicio(this.estado); this.publicar(); }
+  async reiniciar() { this.estado = completar({ ...clonar(ESTADO_VACIO), actualizado: Date.now() }); this.publicar(); }
 }
 
 class SyncFirebase extends Base {
@@ -86,8 +88,8 @@ class SyncFirebase extends Base {
     this.base = db.getDatabase(app);
     this.raiz = db.ref(this.base, 'partidas/' + PARTIDA_ID);
     const inicial = await db.get(this.raiz);
-    if (!inicial.exists()) await db.set(this.raiz, ESTADO_INICIAL);
-    db.onValue(this.raiz, (s) => { this.estado = s.val() || clonar(ESTADO_INICIAL); this.emitir(); });
+    if (!inicial.exists()) await db.set(this.raiz, { ...ESTADO_VACIO, actualizado: Date.now() });
+    db.onValue(this.raiz, (s) => { this.estado = completar(s.val()); this.emitir(); });
     db.onValue(db.ref(this.base, '.info/connected'), (s) => { this.conectado = !!s.val(); this.emitir(); });
   }
   async escribir(updates) {
@@ -96,14 +98,19 @@ class SyncFirebase extends Base {
     this.emitir();
     await this.db.update(this.raiz, u);
   }
-  async reiniciar() { await this.db.set(this.raiz, reinicio(this.estado)); }
+  async reiniciar() { await this.db.set(this.raiz, { ...ESTADO_VACIO, actualizado: Date.now() }); }
 }
 
 export async function crearSync() {
   if (FIREBASE_CONFIG) {
     const s = new SyncFirebase();
     try { await s.iniciar(); return s; }
-    catch (e) { console.error('No se pudo conectar con Firebase', e); const l = new SyncLocal(); l.error = 'No se pudo conectar con Firebase. Se usa el modo de demostración.'; await l.iniciar(); return l; }
+    catch (e) {
+      console.error('No se pudo conectar con Firebase', e);
+      const l = new SyncLocal();
+      l.error = /permission/i.test(String(e && e.message)) ? 'Firebase rechazó la conexión: revisa las reglas de la base de datos. Se usa el modo de demostración.' : 'No se pudo conectar con Firebase. Se usa el modo de demostración.';
+      await l.iniciar(); return l;
+    }
   }
   const l = new SyncLocal();
   await l.iniciar();
