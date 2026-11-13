@@ -1,4 +1,4 @@
-import { ATRIBUTOS, NOMBRE_ATRIBUTO, COLORES, CATEGORIAS, TIPOS_PRESENCIA, fichaVacia } from './datos.js';
+import { ATRIBUTOS, NOMBRE_ATRIBUTO, COLORES, CATEGORIAS, TIPOS_PRESENCIA, MOMENTOS, LUCES, CLIMAS, TEMPERATURAS, fichaVacia } from './datos.js';
 import { crearSync, claveSegura } from './sync.js';
 
 /* ================= UTILIDADES ================= */
@@ -33,6 +33,8 @@ const ui = {
   editandoPj: null, // id del personaje en el editor, o 'nuevo'
   editandoEnt: null, // { cat, id } de la entrada de Historia en edición
   pistaPara: null,
+  prepCombate: false,
+  ultimoTurno: 'inicio',
   ocupado: false,
 };
 ui.ver = ui.yo;
@@ -118,7 +120,7 @@ function htmlEscenaVisual() {
 function pjMini(id) {
   const f = F(id); const s = S(id); const pv = pvDe(id);
   const est = Object.keys(s.estados || {});
-  return `<button type="button" class="pj" style="--c:${f.color};text-align:left" data-accion="elegir" data-id="${esc(id)}">
+  return `<button type="button" class="pj${esTurnoDe('pj', id) ? ' turno' : ''}" style="--c:${f.color};text-align:left" data-accion="elegir" data-id="${esc(id)}">
     ${avatar(id)}
     <div>
       <div class="pj-fila"><span class="pj-nombre">${esc(f.nombre)}${ui.yo === id ? '<span class="tu">TÚ</span>' : ''}</span><span class="pv-num num">${tienePv(id) ? `<b>${pv}</b>/${f.pvMax} PV` : 'PV por definir'}</span></div>
@@ -134,18 +136,83 @@ function htmlPresencias() {
   if (!lista.length) return '';
   return `<section class="panel">
     <h2 class="panel-titulo">En escena</h2>
-    <div class="guardianes">${lista.map(([, p]) => {
+    <div class="guardianes">${lista.map(([k, p]) => {
       const est = Object.keys(p.estados || {});
-      return `<div class="guardian ${esc(p.tipo || 'enemigo')}${p.derrotado ? ' caido' : ''}">${srcDe(p.img) ? `<img class="guardian-foto" src="${srcDe(p.img)}" alt="">` : ''}<div style="flex:1;min-width:0"><div class="guardian-nombre">${esc(p.nombre)}</div><div class="guardian-info">${esc(TIPOS_PRESENCIA[p.tipo] || 'Enemigo')}${p.derrotado ? ' · Derrotado' : p.dano ? ` · ${p.dano} de daño recibido` : ''}</div></div><div class="pj-chips" style="justify-content:flex-end;margin:0">${est.map((x) => `<span class="chip est">${esc(x)}</span>`).join('')}</div></div>`;
+      return `<div class="guardian ${esc(p.tipo || 'enemigo')}${p.derrotado ? ' caido' : ''}${esTurnoDe('pr', k) ? ' turno' : ''}">${srcDe(p.img) ? `<img class="guardian-foto" src="${srcDe(p.img)}" alt="">` : ''}<div style="flex:1;min-width:0"><div class="guardian-nombre">${esc(p.nombre)}</div><div class="guardian-info">${esc(TIPOS_PRESENCIA[p.tipo] || 'Enemigo')}${p.derrotado ? ' · Derrotado' : p.dano ? ` · ${p.dano} de daño recibido` : ''}</div></div><div class="pj-chips" style="justify-content:flex-end;margin:0">${est.map((x) => `<span class="chip est">${esc(x)}</span>`).join('')}</div></div>`;
     }).join('')}</div>
   </section>`;
 }
 
+/* ---------- iniciativa, ambiente y relojes ---------- */
+const ICONOS = {
+  sol: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  'sol-bajo': '<path d="M3 17h18M7 17a5 5 0 0110 0M12 6v3M5.6 9.6l1.8 1.8M18.4 9.6l-1.8 1.8M6 21h12"/>',
+  luna: '<path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5z"/>',
+  nube: '<path d="M7 18h10a4 4 0 000-8 6 6 0 00-11.5 2A3 3 0 007 18z"/>',
+  lluvia: '<path d="M7 14h10a4 4 0 000-8 6 6 0 00-11.5 2A3 3 0 007 14z"/><path d="M8 17l-1 3M12 17l-1 3M16 17l-1 3"/>',
+  niebla: '<path d="M4 8h16M3 12h18M5 16h14M8 20h8"/>',
+  viento: '<path d="M3 9h11a3 3 0 10-3-3M3 15h15a3 3 0 11-3 3"/>',
+  rayo: '<path d="M7 13h10a4 4 0 000-8 6 6 0 00-11.5 2A3 3 0 007 13z"/><path d="M12 14l-2 4h4l-2 4"/>',
+  nieve: '<path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9"/>',
+  luz: '<path d="M9 18h6M10 21h4M12 3a6 6 0 00-3.5 10.9V16h7v-2.1A6 6 0 0012 3z"/>',
+  termo: '<path d="M14 14.8V5a2 2 0 10-4 0v9.8a4 4 0 104 0z"/>',
+  espadas: '<path d="M4 4l10 10M14 14l2 4 2-2-4-2M20 4L10 14M10 14l-2 4-2-2 4-2"/>',
+};
+const icono = (k) => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${ICONOS[k] || ''}</svg>`;
+const COLOR_TIPO = { enemigo: '#e0564b', aliado: '#79c27a', neutral: '#d8dbe8' };
+
+const C = () => E.combate || {};
+const iniNum = (p) => (p.ini === '' || p.ini == null ? -999 : +p.ini);
+function participantes() {
+  return Object.entries(C().participantes || {}).sort((a, b) => iniNum(b[1]) - iniNum(a[1]) || (+b[1].desempate || 0) - (+a[1].desempate || 0) || String(a[1].nombre).localeCompare(String(b[1].nombre)));
+}
+const presencia = (k) => (E.presencias || {})[k] || null;
+const derrotadoP = (p) => p.tipo === 'pr' && !!(presencia(p.ref) || {}).derrotado;
+const nombreP = (p) => (p.tipo === 'pj' ? F(p.ref).nombre : p.tipo === 'pr' ? (presencia(p.ref) || {}).nombre : '') || p.nombre;
+const colorP = (p) => (p.tipo === 'pj' ? F(p.ref).color : p.tipo === 'pr' ? COLOR_TIPO[(presencia(p.ref) || {}).tipo] || COLOR_TIPO.enemigo : '#a89e8b');
+const turnoDe = () => { const c = C(); return c.activo ? (c.participantes || {})[c.turno] || null : null; };
+const esTurnoDe = (tipo, ref) => { const t = turnoDe(); return !!t && t.tipo === tipo && t.ref === ref; };
+
+function htmlIniciativa() {
+  const c = C(); if (!c.activo) return '';
+  return `<section class="panel iniciativa">
+    <h2 class="panel-titulo">${icono('espadas')} Iniciativa <span class="extra">Ronda ${c.ronda}</span></h2>
+    <ol class="orden">${participantes().map(([pid, p]) => `<li class="${pid === c.turno ? 'actual' : ''}${derrotadoP(p) ? ' caido' : ''}" style="--c:${colorP(p)}"><span class="ini num">${p.ini === '' || p.ini == null ? '—' : esc(p.ini)}</span><span class="quien">${esc(nombreP(p))}</span>${pid === c.turno ? '<span class="su-turno">Su turno</span>' : ''}</li>`).join('')}</ol>
+  </section>`;
+}
+
+function ambienteActual() {
+  const a = E.ambiente || {};
+  return { a, m: MOMENTOS[a.momento] || MOMENTOS.manana, l: LUCES[a.luz] || LUCES.brillante, cl: CLIMAS[a.clima] || CLIMAS.despejado, t: TEMPERATURAS[a.temperatura] || TEMPERATURAS.templado };
+}
+function htmlAmbiente() {
+  const { a, m, l, cl, t } = ambienteActual();
+  const reglas = [[l.nombre, l.regla], [cl.nombre, cl.regla], [t.nombre, t.regla]].filter(([, r]) => r);
+  return `<section class="panel ambiente">
+    <div class="amb-cab">${icono(m.icono)}<div style="min-width:0"><div class="amb-dia">Día ${esc(a.dia || 1)} · ${esc(m.nombre)}</div>
+      <div class="amb-chips"><span class="chip">${icono('luz')}${esc(l.nombre)}</span><span class="chip">${icono(cl.icono)}${esc(cl.nombre)}</span>${a.temperatura && a.temperatura !== 'templado' ? `<span class="chip malo">${icono('termo')}${esc(t.nombre)}</span>` : ''}</div></div></div>
+    ${a.sensacion ? `<p class="sensacion">${esc(a.sensacion)}</p>` : ''}
+    ${reglas.length ? `<ul class="reglas">${reglas.map(([n, r]) => `<li><b>${esc(n)}:</b> ${esc(r)}</li>`).join('')}</ul>` : ''}
+  </section>`;
+}
+
+function svgReloj(llenos, total, tam = 64) {
+  const r = 28, cx = 32, cy = 32; let d = '';
+  for (let i = 0; i < total; i++) {
+    const a0 = (i / total) * 2 * Math.PI - Math.PI / 2, a1 = ((i + 1) / total) * 2 * Math.PI - Math.PI / 2;
+    d += `<path d="M${cx} ${cy}L${(cx + r * Math.cos(a0)).toFixed(2)} ${(cy + r * Math.sin(a0)).toFixed(2)}A${r} ${r} 0 0 1 ${(cx + r * Math.cos(a1)).toFixed(2)} ${(cy + r * Math.sin(a1)).toFixed(2)}Z"${i < llenos ? ' class="lleno"' : ''}/>`;
+  }
+  return `<svg class="reloj" viewBox="0 0 64 64" width="${tam}" height="${tam}" aria-hidden="true">${d}</svg>`;
+}
+function htmlRelojes() {
+  const lista = porOrden(E.relojes); if (!lista.length) return '';
+  return `<section class="panel"><h2 class="panel-titulo">Relojes</h2><div class="relojes">${lista.map(([, r]) => { const ok = (r.llenos || 0) >= r.segmentos; return `<div class="reloj-item${ok ? ' completo' : ''}">${svgReloj(r.llenos || 0, r.segmentos)}<div style="min-width:0"><div class="reloj-nombre">${esc(r.nombre)}</div><div class="tenue num" style="font-size:14px">${r.llenos || 0} de ${r.segmentos}${ok ? ' · ¡Se cumplió!' : ''}</div></div></div>`; }).join('')}</div></section>`;
+}
+
 function vistaMesa() {
   const e = E.escena || {};
-  const n = E.narracion || {};
   const pjs = listaPj();
-  if (!pjs.length && !e.lugar && !n.texto) {
+  if (!pjs.length && !e.lugar) {
     return `<section class="panel bienvenida">
       <h1>${esc((E.campana || {}).nombre || 'Mi campaña')}</h1>
       <p>La mesa está lista para una campaña nueva.</p>
@@ -153,7 +220,7 @@ function vistaMesa() {
         <li><b>DM:</b> entra a <a href="#dm">DM</a> y crea tu PIN.</li>
         <li><b>Personajes:</b> créalos desde DM → Personajes, o que cada jugador cree el suyo en <a href="#ficha">Mi personaje</a>.</li>
         <li><b>Mapas e imágenes:</b> súbelos en DM → Biblioteca.</li>
-        <li><b>A jugar:</b> pon esta pantalla en <a href="#tv">Modo TV</a> y narra desde DM → Mesa.</li>
+        <li><b>A jugar:</b> pon esta pantalla en <a href="#tv">Modo TV</a> y lleva la iniciativa, el ambiente y los relojes desde DM → Mesa.</li>
       </ol>
     </section>`;
   }
@@ -167,11 +234,9 @@ function vistaMesa() {
       ${htmlEscenaVisual()}
     </div>
     <div class="columna">
-      <section class="pergamino" aria-live="polite">
-        <h2 class="panel-titulo">Habla el DM</h2>
-        <div class="narracion-texto">${esc(n.texto || 'Aún no hay narración.')}</div>
-        ${n.ts ? `<div class="narracion-hora">${hora(n.ts)}</div>` : ''}
-      </section>
+      ${htmlIniciativa()}
+      ${htmlAmbiente()}
+      ${htmlRelojes()}
       <section class="panel">
         <h2 class="panel-titulo">El grupo</h2>
         ${pjs.length ? `<div class="grupo">${pjs.map(([id]) => pjMini(id)).join('')}</div>` : '<p class="tenue" style="margin:0">Todavía no hay personajes.</p>'}
@@ -234,7 +299,11 @@ function vistaHoja(id) {
   const conjPorNivel = {};
   for (const c of f.conjuros || []) (conjPorNivel[c.nivel || 1] = conjPorNivel[c.nivel || 1] || []).push(c);
   const datos = [f.raza, [f.clase, f.subclase].filter(Boolean).join(' · '), f.nivel ? `Nivel ${f.nivel}` : '', f.edad, f.alineamiento].filter(Boolean).join(' · ');
+  const t = turnoDe();
+  const mio = !!t && t.tipo === 'pj' && t.ref === id;
+  const banner = C().activo ? `<div class="ancho banner-turno${mio ? ' mio' : ''}" role="status">${icono('espadas')}<span>${mio ? '¡Es tu turno!' : `Ronda ${C().ronda} · Turno de ${esc(t ? nombreP(t) : '—')}`}</span></div>` : '';
   return `<div class="hoja" style="--c:${f.color}">
+    ${banner}
     <section class="panel ancho cabeza">
       ${avatar(id, 'cabeza-avatar')}
       <div>
@@ -535,7 +604,7 @@ const opcionesImg = (sel, filtro = (i) => i.tipo !== 'mapa', vacio = 'Sin imagen
 function vistaConfigDM() {
   return `<section class="panel" style="max-width:520px;margin:0 auto">
     <h2 class="panel-titulo">Configura tu campaña</h2>
-    <p style="margin:0 0 12px">Eres el primer DM en entrar. Ponle nombre a la campaña y crea el PIN del DM: solo quien lo tenga podrá narrar, editar la Historia y ver todas las fichas.</p>
+    <p style="margin:0 0 12px">Eres el primer DM en entrar. Ponle nombre a la campaña y crea el PIN del DM: solo quien lo tenga podrá llevar la mesa, editar la Historia y ver todas las fichas.</p>
     <div class="columna" style="gap:10px">
       <div><label class="etq" for="cfg-nombre">Nombre de la campaña</label><input class="campo" style="width:100%" id="cfg-nombre" data-borrador value="${val('cfg-nombre', (E.campana || {}).nombre)}"></div>
       <div><label class="etq" for="cfg-pin">PIN del DM (4 dígitos)</label><input class="campo" style="width:100%" id="cfg-pin" data-borrador inputmode="numeric" maxlength="4" autocomplete="off" value="${val('cfg-pin')}"></div>
@@ -553,6 +622,86 @@ function vistaDM() {
   return `<div class="seg" role="tablist" aria-label="Secciones del DM">${tabs.map(([k, t]) => `<button type="button" role="tab" aria-selected="${ui.dmTab === k}" data-accion="dm-tab" data-tab="${k}">${t}</button>`).join('')}</div>${cuerpo}`;
 }
 
+function dmCombate() {
+  const c = C();
+  if (c.activo) {
+    const lista = participantes();
+    const dentro = new Set(lista.map(([, p]) => `${p.tipo}:${p.ref}`));
+    const fuera = [...listaPj().map(([id]) => [`pj:${id}`, F(id).nombre]), ...porOrden(E.presencias).map(([k, p]) => [`pr:${k}`, p.nombre])].filter(([v]) => !dentro.has(v));
+    return `<section class="panel">
+      <h2 class="panel-titulo">${icono('espadas')} Combate <span class="extra">Ronda ${c.ronda}</span></h2>
+      <div class="fila" style="margin-bottom:12px"><button type="button" class="btn" data-accion="turno" data-d="-1">◀ Anterior</button><button type="button" class="btn btn-oro" data-accion="turno" data-d="1">Siguiente turno ▶</button></div>
+      <ol class="orden dm">${lista.map(([pid, p]) => `<li class="${pid === c.turno ? 'actual' : ''}${derrotadoP(p) ? ' caido' : ''}" style="--c:${colorP(p)}">
+        <label class="sr" for="cini-${pid}">Iniciativa de ${esc(nombreP(p))}</label><input class="campo num ini-in" id="cini-${pid}" type="number" inputmode="numeric" value="${esc(p.ini ?? '')}" data-cambio="ini" data-pid="${pid}">
+        <span class="quien">${esc(nombreP(p))}${derrotadoP(p) ? ' <span class="tenue">(derrotado, se salta)</span>' : ''}</span>
+        ${pid === c.turno ? '<span class="su-turno">Su turno</span>' : `<button type="button" class="btn btn-peq" data-accion="turno-a" data-pid="${pid}">Darle el turno</button>`}
+        <button type="button" class="btn btn-peq btn-peligro" data-accion="cb-quitar" data-pid="${pid}" aria-label="Quitar a ${esc(nombreP(p))} del combate">×</button></li>`).join('')}</ol>
+      <p class="sub" style="margin-top:14px">Sumar al combate</p>
+      <div class="form-grid tres">
+        <div><label class="etq" for="cb-add">Quién</label><select class="campo" id="cb-add" data-borrador><option value="">Otro (escribe el nombre)</option>${fuera.map(([v, n]) => `<option value="${esc(v)}"${ui.borradores['cb-add'] === v ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></div>
+        <div><label class="etq" for="cb-add-nombre">Nombre (si es otro)</label><input class="campo" id="cb-add-nombre" data-borrador value="${val('cb-add-nombre')}"></div>
+        <div><label class="etq" for="cb-add-ini">Iniciativa</label><input class="campo num" id="cb-add-ini" type="number" inputmode="numeric" data-borrador data-enter="cb-add" value="${val('cb-add-ini')}"></div>
+      </div>
+      <div class="fila" style="margin-top:10px"><button type="button" class="btn btn-peq" data-accion="cb-add">Sumar</button></div>
+      <div style="margin-top:16px">${botonConfirmar('fin-combate', 'Terminar combate', 'fin-combate', '', 'btn btn-peligro')}</div>
+    </section>`;
+  }
+  if (!ui.prepCombate) {
+    return `<section class="panel">
+      <h2 class="panel-titulo">${icono('espadas')} Combate</h2>
+      <p class="tenue" style="margin:0 0 10px;font-size:15px">Cada jugador tira su d20 de iniciativa y te dice el total. La mesa muestra el orden, la ronda y a quién le toca; cada jugador ve en su celular cuando es su turno.</p>
+      <button type="button" class="btn btn-oro" data-accion="prep-combate">Preparar combate</button>
+    </section>`;
+  }
+  const cands = [
+    ...listaPj().map(([id]) => ({ k: `pj-${id}`, nombre: F(id).nombre, mod: F(id).iniciativa || '', def: true, color: F(id).color })),
+    ...porOrden(E.presencias).filter(([, p]) => !p.derrotado).map(([k, p]) => ({ k: `pr-${k}`, nombre: p.nombre, mod: '', def: p.tipo !== 'neutral', color: COLOR_TIPO[p.tipo] || COLOR_TIPO.enemigo })),
+  ];
+  return `<section class="panel">
+    <h2 class="panel-titulo">${icono('espadas')} Preparar combate</h2>
+    <p class="tenue" style="margin:0 0 10px;font-size:15px">Marca quién pelea y escribe su iniciativa. «Tirar» lanza un d20 digital y le suma el modificador, útil para los enemigos.</p>
+    ${cands.length ? `<ul class="prep">${cands.map((x) => { const marcado = ui.borradores['cb-' + x.k] ?? x.def; return `<li style="--c:${x.color}">
+      <label class="check"><input type="checkbox" id="cb-${x.k}" data-borrador-check${marcado ? ' checked' : ''}> ${esc(x.nombre)}${x.mod ? ` <span class="tenue num">(${esc(x.mod)})</span>` : ''}</label>
+      <label class="sr" for="ini-${x.k}">Iniciativa de ${esc(x.nombre)}</label><input class="campo num ini-in" id="ini-${x.k}" type="number" inputmode="numeric" placeholder="—" data-borrador value="${val('ini-' + x.k)}">
+      <button type="button" class="btn btn-peq" data-accion="tirar" data-k="${x.k}" data-mod="${esc(x.mod)}">Tirar</button></li>`; }).join('')}</ul>` : '<p class="tenue">No hay personajes ni presencias en escena todavía.</p>'}
+    <p class="sub" style="margin-top:12px">Otro combatiente (opcional)</p>
+    <div class="form-grid dos"><div><label class="etq" for="cb-extra-nombre">Nombre</label><input class="campo" id="cb-extra-nombre" data-borrador value="${val('cb-extra-nombre')}"></div><div><label class="etq" for="cb-extra-ini">Iniciativa</label><input class="campo num" id="cb-extra-ini" type="number" inputmode="numeric" data-borrador value="${val('cb-extra-ini')}"></div></div>
+    <div class="fila" style="margin-top:14px"><button type="button" class="btn btn-oro" data-accion="empezar-combate">Empezar combate</button><button type="button" class="btn" data-accion="cancelar-combate">Cancelar</button></div>
+  </section>`;
+}
+
+function dmAmbiente() {
+  const { a } = ambienteActual();
+  const sel = (id, campo, lista, actual) => `<div><label class="etq" for="${id}">${{ momento: 'Momento del día', luz: 'Luz', clima: 'Clima', temperatura: 'Temperatura' }[campo]}</label><select class="campo" id="${id}" data-cambio="amb" data-campo="${campo}">${Object.entries(lista).map(([k, x]) => `<option value="${k}"${k === actual ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('')}</select></div>`;
+  return `<section class="panel">
+    <h2 class="panel-titulo">Ambiente</h2>
+    <div class="fila-sep" style="margin-bottom:10px">
+      <div class="contador"><span class="recurso-nombre">Día</span><button type="button" class="btn btn-red btn-peq" data-accion="dia" data-d="-1" aria-label="Día anterior">−</button><b class="num">${esc(a.dia || 1)}</b><button type="button" class="btn btn-red btn-peq" data-accion="dia" data-d="1" aria-label="Día siguiente">+</button></div>
+      <button type="button" class="btn btn-oro" data-accion="avanzar-tiempo">Avanzar el tiempo ▶</button>
+    </div>
+    <div class="form-grid dos">
+      ${sel('amb-momento', 'momento', MOMENTOS, a.momento || 'manana')}
+      ${sel('amb-luz', 'luz', LUCES, a.luz || 'brillante')}
+      ${sel('amb-clima', 'clima', CLIMAS, a.clima || 'despejado')}
+      ${sel('amb-temp', 'temperatura', TEMPERATURAS, a.temperatura || 'templado')}
+    </div>
+    <div class="agregar"><label class="sr" for="amb-sens">Sensación del lugar</label><input id="amb-sens" placeholder="Sensación del lugar (ej. Huele a azufre y se oye agua goteando)" data-borrador data-enter="amb-sens" value="${val('amb-sens', a.sensacion)}"><button type="button" class="btn btn-peq" data-accion="amb-sens">Mostrar</button></div>
+  </section>`;
+}
+
+function dmRelojes() {
+  const lista = porOrden(E.relojes);
+  return `<section class="panel">
+    <h2 class="panel-titulo">Relojes</h2>
+    <p class="tenue" style="margin:0 0 10px;font-size:15px">Cuentas regresivas para lo que avanza mientras el grupo actúa: refuerzos que llegan, un ritual que se completa, una marea que sube.</p>
+    <div class="agregar" style="margin-top:0"><label class="sr" for="rl-nombre">Nombre del reloj</label><input id="rl-nombre" placeholder="Ej. Los guardias dan la alarma" data-borrador data-enter="rl-crear" value="${val('rl-nombre')}">
+      <label class="sr" for="rl-seg">Segmentos</label><select class="campo campo-peq" id="rl-seg" data-borrador style="margin:0;width:auto">${[4, 6, 8].map((n) => `<option value="${n}"${(ui.borradores['rl-seg'] || '6') == n ? ' selected' : ''}>${n} partes</option>`).join('')}</select>
+      <button type="button" class="btn btn-peq" data-accion="rl-crear">Crear</button></div>
+    ${lista.map(([k, r]) => `<div class="recurso"><div class="fila" style="gap:12px;flex-wrap:nowrap;min-width:0">${svgReloj(r.llenos || 0, r.segmentos, 40)}<div style="min-width:0"><div class="recurso-nombre">${esc(r.nombre)}</div><div class="recurso-det num">${r.llenos || 0} de ${r.segmentos}</div></div></div>
+      <div class="fila" style="flex:none">${pips(r.llenos || 0, r.segmentos, 'reloj', `data-k="${esc(k)}"`, 'reloj-pip')}<button type="button" class="btn btn-peq btn-peligro" data-accion="rl-borrar" data-k="${esc(k)}" aria-label="Borrar reloj ${esc(r.nombre)}">×</button></div></div>`).join('')}
+  </section>`;
+}
+
 function dmMesa() {
   const e = E.escena || {};
   const clave = mapaActual();
@@ -560,23 +709,7 @@ function dmMesa() {
   const pistas = porOrden(E.pistas, (p) => p.ts || 0);
   return `<div class="narrador">
     <div class="columna">
-      <section class="panel">
-        <h2 class="panel-titulo">Narrar en la mesa</h2>
-        <label class="sr" for="narr">Lo que se muestra en la mesa</label>
-        <textarea class="campo" id="narr" data-borrador style="min-height:150px" placeholder="Lo que quieres que todos lean en la pantalla…">${val('narr')}</textarea>
-        <div class="fila" style="margin-top:10px">
-          <button type="button" class="btn btn-oro" data-accion="narrar">Mostrar en la mesa</button>
-          <label class="check"><input type="checkbox" id="narr-bit" data-borrador-check${ui.borradores['narr-bit'] === false ? '' : ' checked'}> Guardar en la bitácora</label>
-        </div>
-      </section>
-
-      <section class="panel">
-        <h2 class="panel-titulo">Pistas del grupo</h2>
-        <div class="agregar" style="margin-top:0"><label class="sr" for="pista-grupo">Nueva pista para todos</label><input id="pista-grupo" placeholder="Algo que descubrió todo el grupo" data-borrador data-enter="pista-grupo" value="${val('pista-grupo')}"><button type="button" class="btn btn-peq" data-accion="pista-grupo">Añadir</button></div>
-        <ul class="lista inv" style="margin-top:8px">${pistas.map(([k, p]) => `<li><span>${esc(typeof p === 'string' ? p : p.texto)}</span><button type="button" data-accion="pista-grupo-quitar" data-k="${esc(k)}" aria-label="Quitar pista">×</button></li>`).join('') || '<li class="tenue">Ninguna.</li>'}</ul>
-        <p class="tenue" style="font-size:14px;margin:8px 0 0">Las pistas privadas se mandan desde la pestaña Personajes.</p>
-      </section>
-
+      ${dmCombate()}
       <section class="panel">
         <h2 class="panel-titulo">En escena</h2>
         <p class="tenue" style="font-size:15px;margin:0 0 8px">Enemigos, aliados y personajes no jugadores que aparecen en el mapa y en la mesa.</p>
@@ -597,9 +730,18 @@ function dmMesa() {
           <div class="fila" style="flex:none;justify-content:flex-end;max-width:190px"><button type="button" class="btn btn-red btn-peq" data-accion="pr-dano" data-k="${esc(k)}" data-d="-1" aria-label="Quitar daño">−</button><button type="button" class="btn btn-red btn-peq" data-accion="pr-dano" data-k="${esc(k)}" data-d="1" aria-label="Sumar daño">+</button><button type="button" class="btn btn-peq" data-accion="pr-derrotado" data-k="${esc(k)}">${p.derrotado ? 'Revivir' : 'Derrotado'}</button><button type="button" class="btn btn-peq btn-peligro" data-accion="pr-quitar" data-k="${esc(k)}">Quitar</button></div></div>`;
         }).join('')}
       </section>
+      <section class="panel">
+        <h2 class="panel-titulo">Pistas del grupo</h2>
+        <div class="agregar" style="margin-top:0"><label class="sr" for="pista-grupo">Nueva pista para todos</label><input id="pista-grupo" placeholder="Algo que descubrió todo el grupo" data-borrador data-enter="pista-grupo" value="${val('pista-grupo')}"><button type="button" class="btn btn-peq" data-accion="pista-grupo">Añadir</button></div>
+        <ul class="lista inv" style="margin-top:8px">${pistas.map(([k, p]) => `<li><span>${esc(typeof p === 'string' ? p : p.texto)}</span><button type="button" data-accion="pista-grupo-quitar" data-k="${esc(k)}" aria-label="Quitar pista">×</button></li>`).join('') || '<li class="tenue">Ninguna.</li>'}</ul>
+        <p class="tenue" style="font-size:14px;margin:8px 0 0">Las pistas privadas se mandan desde la pestaña Personajes.</p>
+      </section>
+
     </div>
 
     <div class="columna">
+      ${dmAmbiente()}
+      ${dmRelojes()}
       <section class="panel">
         <h2 class="panel-titulo">Mapa</h2>
         ${ilu ? `<div class="aviso-ilu"><span>En la mesa se ve la imagen <b>${esc(ilu.nombre)}</b>.</span><button type="button" class="btn btn-peq btn-oro" data-accion="mostrar" data-id="">Volver al mapa</button></div>` : ''}
@@ -810,6 +952,12 @@ function render() {
   $('.sync-texto', s).textContent = sync.modo === 'demo' ? 'Demostración' : sync.conectado ? 'En vivo' : 'Sin conexión';
   s.title = sync.modo === 'demo' ? (sync.error || 'Modo de demostración: sincroniza solo las pestañas de este dispositivo.') : 'Conectado a la campaña compartida.';
   montarMapa();
+  const t = turnoDe();
+  const clave = t ? `${C().ronda}:${C().turno}` : null;
+  if (clave !== ui.ultimoTurno) {
+    if (ui.ultimoTurno !== 'inicio' && t && t.tipo === 'pj' && t.ref === ui.yo) { try { navigator.vibrate && navigator.vibrate([180, 80, 180]); } catch (e) { /* sin vibración */ } }
+    ui.ultimoTurno = clave;
+  }
 }
 
 function irA() {
@@ -1027,14 +1175,88 @@ const ACCIONES = {
     sync.escribir({ 'campana/nombre': nombre, 'campana/pinDM': p1 });
     aviso('Campaña lista. Ya eres el DM.');
   },
-  narrar() {
-    const t = ($('#narr').value || '').trim();
-    if (!t) { aviso('Escribe lo que quieres mostrar'); $('#narr').focus(); return; }
-    const ts = Date.now();
-    const u = { narracion: { texto: t, ts } };
-    if (ui.borradores['narr-bit'] !== false) u[`bitacora/n${ts}`] = { ts, tipo: 'narracion', texto: t };
-    sync.escribir(u); delete ui.borradores.narr; aviso('Se muestra en la mesa');
+  /* combate */
+  'prep-combate'() { ui.prepCombate = true; limpiar('cb-'); limpiar('ini-'); render(); },
+  'cancelar-combate'() { ui.prepCombate = false; render(); },
+  tirar(d) {
+    const m = parseInt(String(d.mod || '0').replace('−', '-'), 10) || 0;
+    const dado = 1 + Math.floor(Math.random() * 20);
+    ui.borradores['ini-' + d.k] = String(dado + m);
+    aviso(`d20: ${dado}${m ? ` ${m > 0 ? '+' : '−'} ${Math.abs(m)}` : ''} = ${dado + m}`); render();
   },
+  'empezar-combate'() {
+    const part = {};
+    const add = (tipo, ref, nombre, ini, desempate) => { part[nuevoId('c')] = { tipo, ref, nombre, ini, desempate }; };
+    const ini = (k) => { const v = parseInt(ui.borradores['ini-' + k], 10); return Number.isFinite(v) ? v : ''; };
+    for (const [id] of listaPj()) if (ui.borradores['cb-pj-' + id] ?? true) { const des = (F(id).atributos || {}).DES; add('pj', id, F(id).nombre, ini('pj-' + id), des === '' || des == null ? 0 : Math.floor((+des - 10) / 2)); }
+    for (const [k, p] of porOrden(E.presencias)) if (!p.derrotado && (ui.borradores['cb-pr-' + k] ?? p.tipo !== 'neutral')) add('pr', k, p.nombre, ini('pr-' + k), 0);
+    const extra = (ui.borradores['cb-extra-nombre'] || '').trim();
+    if (extra) { const v = parseInt(ui.borradores['cb-extra-ini'], 10); add('otro', '', extra, Number.isFinite(v) ? v : '', 0); }
+    if (!Object.keys(part).length) { aviso('Marca al menos a un combatiente'); return; }
+    E.combate = { ...C(), participantes: part };
+    const primero = participantes()[0][0];
+    const ts = Date.now();
+    sync.escribir({ combate: { activo: true, ronda: 1, turno: primero, participantes: part }, [`bitacora/c${ts}`]: { ts, tipo: 'cambio', texto: 'Comienza el combate.' } });
+    ui.prepCombate = false; limpiar('cb-'); limpiar('ini-'); aviso('¡Combate! Ronda 1');
+  },
+  turno(d) {
+    const lista = participantes(); if (!lista.length) return;
+    const c = C(); let i = lista.findIndex(([pid]) => pid === c.turno); let ronda = c.ronda || 1;
+    for (let paso = 0; paso < lista.length; paso++) {
+      i += +d.d;
+      if (i >= lista.length) { i = 0; ronda++; }
+      if (i < 0) { i = lista.length - 1; ronda = Math.max(1, ronda - 1); }
+      if (!derrotadoP(lista[i][1])) break;
+    }
+    sync.escribir({ 'combate/turno': lista[i][0], 'combate/ronda': ronda });
+  },
+  'turno-a'(d) { sync.escribir({ 'combate/turno': d.pid }); },
+  'cb-quitar'(d) {
+    const u = { [`combate/participantes/${d.pid}`]: null };
+    if (C().turno === d.pid) { const lista = participantes().filter(([pid]) => pid !== d.pid); const i = participantes().findIndex(([pid]) => pid === d.pid); u['combate/turno'] = lista.length ? lista[Math.min(i, lista.length - 1)][0] : ''; }
+    sync.escribir(u);
+  },
+  'cb-add'() {
+    const sel = $('#cb-add').value; const v = parseInt($('#cb-add-ini').value, 10); const ini = Number.isFinite(v) ? v : '';
+    let tipo = 'otro', ref = '', nombre = ($('#cb-add-nombre').value || '').trim();
+    if (sel) { [tipo, ref] = sel.split(':'); nombre = tipo === 'pj' ? F(ref).nombre : (presencia(ref) || {}).nombre; }
+    if (!nombre) { aviso('Elige a alguien o escribe un nombre'); return; }
+    sync.escribir({ [`combate/participantes/${nuevoId('c')}`]: { tipo, ref, nombre, ini, desempate: 0 } });
+    limpiar('cb-add'); aviso(`${nombre} entra al combate`);
+  },
+  'fin-combate'() {
+    const ts = Date.now();
+    sync.escribir({ combate: { activo: false, ronda: 0, turno: '' }, [`bitacora/c${ts}`]: { ts, tipo: 'cambio', texto: `Fin del combate tras ${C().ronda || 1} ronda${(C().ronda || 1) === 1 ? '' : 's'}.` } });
+    ui.confirmar = null; aviso('Combate terminado');
+  },
+
+  /* ambiente */
+  dia(d) { sync.escribir({ 'ambiente/dia': Math.max(1, (+((E.ambiente || {}).dia) || 1) + +d.d) }); },
+  'avanzar-tiempo'() {
+    const orden = Object.keys(MOMENTOS); const a = E.ambiente || {};
+    let i = orden.indexOf(a.momento || 'manana') + 1; let dia = +a.dia || 1;
+    const u = {};
+    if (i >= orden.length) { i = 0; dia++; const ts = Date.now(); u[`bitacora/c${ts}`] = { ts, tipo: 'cambio', texto: `Comienza el día ${dia}.` }; }
+    u['ambiente/momento'] = orden[i]; u['ambiente/dia'] = dia;
+    sync.escribir(u); aviso(`${MOMENTOS[orden[i]].nombre}${i === 0 ? ` del día ${dia}` : ''}`);
+  },
+  'amb-sens'() { sync.escribir({ 'ambiente/sensacion': ($('#amb-sens').value || '').trim() }); delete ui.borradores['amb-sens']; aviso('Se muestra en la mesa'); },
+
+  /* relojes */
+  'rl-crear'() {
+    const nombre = ($('#rl-nombre').value || '').trim(); if (!nombre) { aviso('Ponle nombre al reloj'); $('#rl-nombre').focus(); return; }
+    sync.escribir({ [`relojes/${nuevoId('rl')}`]: { nombre, segmentos: +($('#rl-seg').value || 6), llenos: 0, orden: Date.now() } });
+    delete ui.borradores['rl-nombre'];
+  },
+  reloj(d) {
+    const r = (E.relojes || {})[d.k]; if (!r) return;
+    const i = +d.i; const nuevo = i < (r.llenos || 0) ? i : i + 1;
+    const u = { [`relojes/${d.k}/llenos`]: nuevo };
+    if (nuevo >= r.segmentos && (r.llenos || 0) < r.segmentos) { const ts = Date.now(); u[`bitacora/c${ts}`] = { ts, tipo: 'cambio', texto: `Se cumplió el reloj: ${r.nombre}.` }; aviso(`¡${r.nombre}!`); }
+    sync.escribir(u);
+  },
+  'rl-borrar'(d) { sync.escribir({ [`relojes/${d.k}`]: null }); },
+
   'pista-grupo'() { const t = ($('#pista-grupo').value || '').trim(); if (!t) { aviso('Escribe la pista'); return; } delete ui.borradores['pista-grupo']; sync.escribir({ [`pistas/${nuevoId('g')}`]: { texto: t, ts: Date.now() } }); },
   'pista-grupo-quitar'(d) { sync.escribir({ [`pistas/${d.k}`]: null }); },
   'pr-agregar'() {
@@ -1194,6 +1416,8 @@ function exportarFichas() {
 
 const CAMBIOS = {
   'ent-cat'() { render(); },
+  ini(t) { const v = parseInt(t.value, 10); sync.escribir({ [`combate/participantes/${t.dataset.pid}/ini`]: Number.isFinite(v) ? v : '' }); },
+  amb(t) { sync.escribir({ [`ambiente/${t.dataset.campo}`]: t.value }); },
   async importar(t) { const f = t.files && t.files[0]; t.value = ''; if (f) await importarFichas(f); },
 };
 

@@ -22,13 +22,47 @@ export const CATEGORIAS = {
 
 export const TIPOS_PRESENCIA = { enemigo: 'Enemigo', neutral: 'Neutral', aliado: 'Aliado' };
 
+// Ambiente de la escena. Las reglas son recordatorios de 5e (2014) que se muestran en la mesa.
+export const MOMENTOS = {
+  amanecer: { nombre: 'Amanecer', icono: 'sol-bajo' },
+  manana: { nombre: 'Mañana', icono: 'sol' },
+  mediodia: { nombre: 'Mediodía', icono: 'sol' },
+  tarde: { nombre: 'Tarde', icono: 'sol' },
+  atardecer: { nombre: 'Atardecer', icono: 'sol-bajo' },
+  noche: { nombre: 'Noche', icono: 'luna' },
+  medianoche: { nombre: 'Medianoche', icono: 'luna' }
+};
+export const LUCES = {
+  brillante: { nombre: 'Luz brillante', regla: 'Se ve con normalidad.' },
+  tenue: { nombre: 'Luz tenue', regla: 'Zona ligeramente oscurecida: desventaja en Percepción basada en la vista.' },
+  oscuridad: { nombre: 'Oscuridad', regla: 'Zona muy oscurecida: en la práctica, cegado. Con visión en la oscuridad se ve como en luz tenue, sin colores.' },
+  magica: { nombre: 'Oscuridad mágica', regla: 'Ni la visión en la oscuridad permite ver a través de ella.' }
+};
+export const CLIMAS = {
+  despejado: { nombre: 'Despejado', icono: 'sol', regla: '' },
+  nublado: { nombre: 'Nublado', icono: 'nube', regla: '' },
+  niebla: { nombre: 'Niebla', icono: 'niebla', regla: 'Zona ligera o muy oscurecida, según lo espesa que sea.' },
+  lluvia: { nombre: 'Lluvia ligera', icono: 'lluvia', regla: '' },
+  lluviaFuerte: { nombre: 'Lluvia intensa', icono: 'lluvia', regla: 'Ligeramente oscurecido. Desventaja en Percepción por vista y oído. Apaga las llamas al aire libre.' },
+  viento: { nombre: 'Viento fuerte', icono: 'viento', regla: 'Desventaja en ataques a distancia con armas y en Percepción por oído. Apaga las llamas al aire libre y dispersa la niebla.' },
+  tormenta: { nombre: 'Tormenta', icono: 'rayo', regla: 'Lluvia intensa y viento fuerte: ligeramente oscurecido, desventaja en Percepción y en ataques a distancia con armas.' },
+  nieve: { nombre: 'Nevada intensa', icono: 'nieve', regla: 'Ligeramente oscurecido. Desventaja en Percepción basada en la vista.' }
+};
+export const TEMPERATURAS = {
+  templado: { nombre: 'Templado', regla: '' },
+  calor: { nombre: 'Calor extremo', regla: 'Sin agua, cada hora salvación de Constitución (CD 5 +1 por hora) o un nivel de agotamiento. Armadura media o pesada: desventaja.' },
+  frio: { nombre: 'Frío extremo', regla: 'Cada hora, salvación de Constitución CD 10 o un nivel de agotamiento, salvo ropa de abrigo o resistencia al frío.' }
+};
+
 // Campaña vacía
 export const ESTADO_VACIO = {
   version: VERSION,
   actualizado: 0,
   campana: { nombre: 'Mi campaña', capitulo: '', pinDM: '' },
   escena: { lugar: '', alerta: '', texto: '', mapa: '', ilustracion: '' },
-  narracion: { texto: '', ts: 0 },
+  ambiente: { dia: 1, momento: 'manana', luz: 'brillante', clima: 'despejado', temperatura: 'templado', sensacion: '' },
+  combate: { activo: false, ronda: 0, turno: '', participantes: {} },
+  relojes: {},
   personajes: {},
   presencias: {},
   imagenes: {},

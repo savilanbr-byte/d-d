@@ -9,16 +9,16 @@ Dirección de la app: https://savilanbr-byte.github.io/d-d/
 1. **DM:** entra a **DM**. La primera vez pide el nombre de la campaña y crea el PIN del DM.
 2. **Personajes:** el DM los crea en **DM → Personajes**, o cada jugador crea el suyo en **Mi personaje → Crear personaje**. Cada ficha tiene su propio PIN.
 3. **Imágenes:** el DM sube mapas, retratos e ilustraciones en **DM → Biblioteca**.
-4. **A jugar:** la pantalla central va en **Mesa → Modo TV**. Cada jugador abre su ficha en el celular.
+4. **A jugar:** la pantalla central va en **Mesa → Modo TV**. Cada jugador abre su ficha en el celular; cuando le toca en combate, su ficha lo avisa (y el celular vibra si lo permite).
 
 ## Qué hace cada parte
 
 | Sección | Para qué |
 |---|---|
-| **Mesa** | Lugar, alerta, mapa con fichas (o una ilustración), lo que narra el DM, el grupo con PV y estados, y quién está en escena. |
+| **Mesa** | Lugar, alerta, mapa con fichas (o una ilustración), iniciativa con la ronda y a quién le toca, ambiente (día, momento, luz, clima, temperatura y sus reglas), relojes de amenaza, el grupo con PV y estados, y quién está en escena. |
 | **Mi personaje** | Ficha viva: PV, espacios de conjuro, concentración, recursos con usos, estados, ataques, conjuros, pistas privadas, notas, atributos, rasgos y equipo. Se edita con **Editar ficha**. |
 | **Historia** | Enciclopedia de la campaña (mundo, personajes no jugadores, lugares, objetos, inscripciones, misterios), galería, pistas del grupo y bitácora. |
-| **DM → Mesa** | Narrar en la pantalla, pistas del grupo, enemigos y aliados en escena, mapa y fichas, escena y descansos. |
+| **DM → Mesa** | Combate (preparar iniciativa, tirar d20 para enemigos, siguiente turno, rondas), ambiente, relojes, enemigos y aliados en escena, pistas del grupo, mapa y fichas, escena y descansos. |
 | **DM → Personajes** | Crear, editar y borrar fichas, ver cualquier ficha, mandar pistas privadas, anotar secretos del DM (no los ve el jugador) e importar o exportar fichas en un archivo `.json`. |
 | **DM → Biblioteca** | Subir imágenes, mostrarlas en la mesa y llenar la Historia. |
 | **DM → Ajustes** | Nombre de la campaña, PIN del DM, PINs de los personajes y borrar la campaña. |
