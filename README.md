@@ -18,9 +18,11 @@ Dirección de la app: https://savilanbr-byte.github.io/d-d/
 | **Mesa** | Lugar, alerta, mapa con fichas (o una ilustración), iniciativa con la ronda y a quién le toca, ambiente (día, momento, luz, clima, temperatura y sus reglas), relojes de amenaza, el grupo con PV y estados, y quién está en escena. |
 | **Mi personaje** | Ficha viva: PV, espacios de conjuro, concentración, recursos con usos, estados, ataques, conjuros, pistas privadas, notas, atributos, rasgos y equipo. Se edita con **Editar ficha**. |
 | **Historia** | Enciclopedia de la campaña (mundo, personajes no jugadores, lugares, objetos, inscripciones, misterios), galería con las imágenes que el DM ya reveló, pistas del grupo y el diario de cada jugador (lo ven solo él y el DM; el DM ve todos los diarios). |
+| **Reglas** | Las reglas de jugador del SRD 5.2.1 en español (cómo jugar, creación de personajes, clases, orígenes, dotes, equipo, conjuros y glosario), con índice y buscador. |
 | **DM → Mesa** | Combate (preparar iniciativa, tirar d20 para enemigos, siguiente turno, rondas), ambiente, relojes, enemigos y aliados en escena, pistas del grupo, mapa y fichas, escena y descansos. |
 | **DM → Personajes** | Crear, editar y borrar fichas, ver cualquier ficha, mandar pistas privadas, anotar secretos del DM (no los ve el jugador) e importar o exportar fichas en un archivo `.json`. |
 | **DM → Biblioteca** | Subir imágenes (llegan sin revelar), revelarlas en la Galería o mostrarlas en la mesa (eso también las revela), llenar la Historia una por una o importando un archivo, y revelar cada entrada cuando el grupo la descubra. |
+| **DM → Reglas** | Las reglas del DM del SRD 5.2.1 (herramientas del juego, objetos mágicos, monstruos y animales). Su buscador encuentra también las reglas de jugador. |
 | **DM → Ajustes** | Nombre de la campaña, PIN del DM, PINs de los personajes y borrar la campaña. |
 
 ## Creador de personajes: formato de las listas
@@ -87,6 +89,8 @@ En **DM → Biblioteca → Importar entradas** se carga un `.json` con muchas en
 | `js/datos.js` | Listas fijas y la campaña vacía |
 | `js/sync.js` | Sincronización en vivo (Firebase) o de demostración |
 | `js/app.js` | Vistas, creador de personajes y panel del DM |
+| `js/reglas.js` | Lector de reglas: índice, buscador y dibujo de tablas y perfiles |
+| `reglas/reglas-jugador.json`, `reglas/reglas-dm.json` | El SRD 5.2.1 en español convertido a capítulos y secciones |
 | `css/estilo.css` | La estética |
 
 ## Reglas de Firebase (Realtime Database → Reglas)
@@ -109,3 +113,7 @@ En **DM → Biblioteca → Importar entradas** se carga un `.json` con muchas en
 - Los PIN son una cortina entre amigos, no una contraseña: quien sepa usar las herramientas del navegador podría verlos.
 - Un dispositivo con el PIN del DM puede abrir todas las fichas sin su PIN.
 - **Borrar toda la campaña** (DM → Ajustes) deja la app vacía otra vez, incluido el PIN del DM.
+
+## Reglas y licencia
+
+Las pestañas de reglas usan el documento de referencia del sistema 5.2.1 en español. Esta obra incluye material procedente del documento de referencia del sistema 5.2.1 (“SRD 5.2.1”) de Wizards of the Coast LLC, disponible en https://www.dndbeyond.com/srd. La licencia sobre el SRD 5.2.1 se concede de acuerdo con la licencia internacional de atribución/reconocimiento 4.0 de Creative Commons, disponible en https://creativecommons.org/licenses/by/4.0/legalcode.

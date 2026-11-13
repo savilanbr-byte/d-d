@@ -1,5 +1,6 @@
 import { ATRIBUTOS, NOMBRE_ATRIBUTO, COLORES, CATEGORIAS, TIPOS_PRESENCIA, MOMENTOS, LUCES, CLIMAS, TEMPERATURAS, fichaVacia } from './datos.js';
 import { crearSync, claveSegura } from './sync.js';
+import { vista as vistaReglasSRD } from './reglas.js';
 
 /* ================= UTILIDADES ================= */
 const $ = (s, r = document) => r.querySelector(s);
@@ -12,7 +13,7 @@ const ls = {
 const nuevoId = (p) => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 const lineas = (t) => String(t || '').split('\n').map((s) => s.trim()).filter(Boolean);
 const mod = (v) => { const m = Math.floor((v - 10) / 2); return (m >= 0 ? '+' : '') + m; };
-const RUTAS = ['mesa', 'ficha', 'historia', 'dm'];
+const RUTAS = ['mesa', 'ficha', 'historia', 'reglas', 'dm'];
 const TIPOS_IMG = { mapa: 'Mapa', retrato: 'Retrato', ilustracion: 'Ilustración' };
 const PLURAL_IMG = { mapa: 'Mapas', retrato: 'Retratos', ilustracion: 'Ilustraciones' };
 const TIPO = { hecho: 'Lo vimos', dicho: 'Lo dijeron', misterio: 'Misterio' };
@@ -37,6 +38,7 @@ const ui = {
   diarioDe: null,
   ultimoTurno: 'inicio',
   ocupado: false,
+  reglas: { jugador: { q: '', sec: null, qPrevia: '' }, dm: { q: '', sec: null, qPrevia: '' } },
 };
 ui.ver = ui.yo;
 let sync;
@@ -641,8 +643,8 @@ function vistaConfigDM() {
 function vistaDM() {
   if (!(E.campana || {}).pinDM) return vistaConfigDM();
   if (!esDM()) return vistaPin('dm');
-  const tabs = [['mesa', 'Mesa'], ['personajes', 'Personajes'], ['biblioteca', 'Biblioteca'], ['ajustes', 'Ajustes']];
-  const cuerpo = { mesa: dmMesa, personajes: dmPersonajes, biblioteca: dmBiblioteca, ajustes: dmAjustes }[ui.dmTab]();
+  const tabs = [['mesa', 'Mesa'], ['personajes', 'Personajes'], ['biblioteca', 'Biblioteca'], ['reglas', 'Reglas'], ['ajustes', 'Ajustes']];
+  const cuerpo = { mesa: dmMesa, personajes: dmPersonajes, biblioteca: dmBiblioteca, reglas: () => vistaReglasSRD('dm', ui.reglas.dm, render), ajustes: dmAjustes }[ui.dmTab]();
   return `<div class="seg" role="tablist" aria-label="Secciones del DM">${tabs.map(([k, t]) => `<button type="button" role="tab" aria-selected="${ui.dmTab === k}" data-accion="dm-tab" data-tab="${k}">${t}</button>`).join('')}</div>${cuerpo}`;
 }
 
@@ -956,7 +958,7 @@ function dmAjustes() {
 }
 
 /* ================= RENDER ================= */
-const VISTAS = { mesa: vistaMesa, ficha: vistaFicha, historia: vistaHistoria, dm: vistaDM };
+const VISTAS = { mesa: vistaMesa, ficha: vistaFicha, historia: vistaHistoria, reglas: () => vistaReglasSRD('jugador', ui.reglas.jugador, render), dm: vistaDM };
 
 function render() {
   if (!E || ui.arrastrando) return;
@@ -1196,6 +1198,17 @@ const ACCIONES = {
   },
 
   /* DM: mesa */
+  'regla-ir'(d) {
+    const est = ui.reglas[ui.ruta === 'dm' ? 'dm' : 'jugador'];
+    if (d.desdeBusqueda) est.qPrevia = est.q;
+    else if (!d.id) est.qPrevia = '';
+    est.q = ''; est.sec = d.id || null;
+    requestAnimationFrame(() => { const p = $('#rg-panel'); if (p) window.scrollTo(0, Math.max(0, p.getBoundingClientRect().top + window.scrollY - ($('.cabecera') ? $('.cabecera').offsetHeight : 0) - 8)); });
+  },
+  'regla-volver-busqueda'() {
+    const est = ui.reglas[ui.ruta === 'dm' ? 'dm' : 'jugador'];
+    est.q = est.qPrevia; est.qPrevia = ''; est.sec = null;
+  },
   'dm-tab'(d) { ui.dmTab = d.tab; ui.confirmar = null; ui.editandoPj = null; render(); },
   'cfg-guardar'() {
     const nombre = (ui.borradores['cfg-nombre'] ?? '').trim() || 'Mi campaña';
@@ -1560,6 +1573,7 @@ document.addEventListener('click', (ev) => {
 document.addEventListener('input', (ev) => {
   const t = ev.target;
   if (t.dataset && 'borrador' in t.dataset && t.id) ui.borradores[t.id] = t.value;
+  if (t.dataset && t.dataset.buscar) { ui.reglas[t.dataset.buscar].q = t.value; clearTimeout(render.t); render.t = setTimeout(render, 140); }
   if (t.dataset && t.dataset.notas) { clearTimeout(guardarNotas.t); guardarNotas.t = setTimeout(() => guardarNotas(t.dataset.notas, t.value), 700); }
 });
 document.addEventListener('change', (ev) => {

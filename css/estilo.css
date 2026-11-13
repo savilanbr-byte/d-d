@@ -74,7 +74,7 @@ h1, h2, h3 { font-family: var(--f-titulo); font-weight: 600; margin: 0; text-wra
 @media (max-width: 420px) { .sync-texto { display: none; } .marca-titulo { font-size: 17px; } }
 
 /* barra inferior */
-.barra-inf { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(4, 1fr); background: rgba(14, 12, 19, .96); border-top: 1px solid var(--linea); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.barra-inf { position: fixed; z-index: 20; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: repeat(5, 1fr); background: rgba(14, 12, 19, .96); border-top: 1px solid var(--linea); padding-bottom: env(safe-area-inset-bottom, 0px); }
 .barra-inf a { height: var(--barra); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 12px; color: var(--tenue); text-decoration: none; font-family: var(--f-etiqueta); letter-spacing: .03em; }
 .barra-inf svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .barra-inf a[aria-current="page"] { color: var(--oro-claro); }
@@ -501,3 +501,64 @@ label.btn { cursor: pointer; }
 .pergamino .chip-btn .num { opacity: .75; }
 .entradas li { flex-wrap: wrap; }
 .entradas details.ancho-li { flex-basis: 100%; margin-top: 4px; }
+
+/* ---------- reglas (SRD 5.2.1) ---------- */
+.rg { max-width: 900px; margin: 0 auto; }
+.rg-busca { margin-bottom: 14px; }
+.rg-busca .campo { width: 100%; font-size: 17px; }
+.rg-caps { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.rg-cap { text-align: left; display: flex; flex-direction: column; gap: 2px; padding: 14px; border-radius: 9px; border: 1px solid var(--linea); background: rgba(0, 0, 0, .22); color: var(--texto); }
+.rg-cap:hover { border-color: var(--oro); }
+.rg-cap-t { font-family: var(--f-titulo); font-weight: 600; color: var(--oro-claro); letter-spacing: .03em; }
+.rg-cap-n { font-size: 13px; color: var(--tenue); }
+.rg-migas { display: flex; flex-wrap: wrap; gap: 2px 4px; margin-bottom: 8px; font-size: 14px; }
+.rg-migas button { border: 0; background: none; padding: 4px 2px; color: var(--oro); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--linea); }
+.rg-migas button + button::before { content: "›"; color: var(--tenue); margin-right: 6px; display: inline-block; text-decoration: none; }
+.rg-titulo { font-size: 24px; color: var(--oro-claro); margin: 2px 0 10px; }
+.rg-texto { line-height: 1.55; }
+.rg-texto p { margin: 0 0 .7em; }
+.rg-texto .rg-h { font-family: var(--f-titulo); color: var(--oro-claro); margin: 1.2em 0 .45em; letter-spacing: .02em; font-weight: 600; }
+.rg-texto h3.rg-h { font-size: 20px; } .rg-texto h4.rg-h { font-size: 18px; } .rg-texto h5.rg-h, .rg-texto h6.rg-h { font-size: 16px; }
+.rg-texto b { color: #f3ead6; }
+.rg-texto .rg-meta { margin: 0 0 .15em; font-size: 15px; }
+.rg-texto .rg-meta + p:not(.rg-meta) { margin-top: .6em; }
+.rg-texto .rg-est { margin: 0 0 .3em; font-size: 15.5px; }
+.rg-texto .rg-s { font-family: var(--f-titulo); color: var(--oro); font-size: 15px; letter-spacing: .06em; border-bottom: 1px solid var(--linea); padding-bottom: 2px; margin: 1em 0 .4em; }
+.rg-texto .rg-k { font-family: var(--f-etiqueta); color: var(--oro); margin: .9em 0 .3em; }
+.rg-ul { margin: 0 0 .7em; padding-left: 1.3em; }
+.rg-ul li { margin: .15em 0; }
+.rg-caja { border: 1px solid var(--linea); border-left: 3px solid var(--oro); border-radius: 8px; background: rgba(201, 162, 74, .06); padding: 10px 14px; margin: .8em 0 1em; font-size: 15.5px; }
+.rg-caja-t { font-family: var(--f-etiqueta); color: var(--oro-claro); font-size: 16px; margin: 0 0 .3em !important; }
+.rg-tabla { margin: .8em 0 1.1em; }
+.rg-tabla figcaption { font-family: var(--f-etiqueta); color: var(--oro); font-size: 15px; margin-bottom: 4px; }
+.rg-desliza { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--linea-suave); border-radius: 8px; }
+.rg-tabla table, .rg-car { border-collapse: collapse; width: 100%; font-size: 14.5px; line-height: 1.35; }
+.rg-tabla th, .rg-tabla td { padding: 6px 9px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--linea-suave); }
+.rg-tabla thead th { color: var(--oro-claro); font-family: var(--f-etiqueta); font-weight: 500; background: rgba(0, 0, 0, .25); white-space: normal; min-width: 3.2em; }
+.rg-tabla th b { color: inherit; font-weight: 500; }
+.rg-tabla .rg-grupo { text-align: center; border-bottom: 1px solid var(--linea); }
+.rg-tabla tbody tr:nth-child(even) td { background: rgba(255, 255, 255, .025); }
+.rg-fila-grupo td { color: var(--oro); background: rgba(201, 162, 74, .08) !important; }
+.rg-car { max-width: 460px; margin: .4em 0 .8em; text-align: center; font-size: 14.5px; }
+.rg-car th, .rg-car td { padding: 3px 5px; border-bottom: 1px solid var(--linea-suave); }
+.rg-car thead th { font-family: var(--f-etiqueta); font-weight: 500; color: var(--tenue); font-size: 12.5px; }
+.rg-car tbody th { color: var(--oro-claro); font-family: var(--f-etiqueta); font-weight: 500; text-align: left; }
+.rg-hijos { display: flex; flex-direction: column; gap: 2px; margin: .6em 0; }
+.rg-hijos.rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 4px 12px; }
+.rg-enlace { text-align: left; border: 0; border-bottom: 1px solid var(--linea-suave); background: none; padding: 7px 2px; color: var(--oro-claro); }
+.rg-enlace:hover { color: #fff; }
+.rg-pasos { display: flex; justify-content: space-between; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+.rg-pasos .btn { max-width: 48%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rg-cuenta { font-size: 14px; margin: 0 0 6px; }
+.rg-resultados { list-style: none; margin: 0; padding: 0; }
+.rg-resultados button { display: flex; flex-direction: column; gap: 1px; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--linea-suave); background: none; padding: 9px 2px; color: var(--texto); }
+.rg-resultados button:hover .rg-r-t { color: #fff; }
+.rg-r-t { font-family: var(--f-titulo); color: var(--oro-claro); font-weight: 600; }
+.rg-r-c { font-size: 13px; color: var(--tenue); }
+.rg-r-f { font-size: 14.5px; color: var(--texto); opacity: .85; }
+.rg-r-f mark { background: rgba(236, 208, 138, .3); color: inherit; border-radius: 2px; }
+.rg-pie { font-size: 12px; color: var(--tenue); margin: 22px 0 0; border-top: 1px solid var(--linea-suave); padding-top: 10px; line-height: 1.4; }
+@media (max-width: 600px) {
+  .rg-titulo { font-size: 21px; }
+  .barra-inf a { font-size: 11px; }
+}
