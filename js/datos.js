@@ -68,8 +68,7 @@ export const ESTADO_VACIO = {
   imagenes: {},
   enciclopedia: {},
   pistas: {},
-  fichas: {},
-  bitacora: {}
+  fichas: {}
 };
 
 // Ficha nueva para el creador de personajes

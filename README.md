@@ -17,10 +17,10 @@ Dirección de la app: https://savilanbr-byte.github.io/d-d/
 |---|---|
 | **Mesa** | Lugar, alerta, mapa con fichas (o una ilustración), iniciativa con la ronda y a quién le toca, ambiente (día, momento, luz, clima, temperatura y sus reglas), relojes de amenaza, el grupo con PV y estados, y quién está en escena. |
 | **Mi personaje** | Ficha viva: PV, espacios de conjuro, concentración, recursos con usos, estados, ataques, conjuros, pistas privadas, notas, atributos, rasgos y equipo. Se edita con **Editar ficha**. |
-| **Historia** | Enciclopedia de la campaña (mundo, personajes no jugadores, lugares, objetos, inscripciones, misterios), galería, pistas del grupo y bitácora. |
+| **Historia** | Enciclopedia de la campaña (mundo, personajes no jugadores, lugares, objetos, inscripciones, misterios), galería con las imágenes que el DM ya reveló, pistas del grupo y el diario de cada jugador (lo ven solo él y el DM; el DM ve todos los diarios). |
 | **DM → Mesa** | Combate (preparar iniciativa, tirar d20 para enemigos, siguiente turno, rondas), ambiente, relojes, enemigos y aliados en escena, pistas del grupo, mapa y fichas, escena y descansos. |
 | **DM → Personajes** | Crear, editar y borrar fichas, ver cualquier ficha, mandar pistas privadas, anotar secretos del DM (no los ve el jugador) e importar o exportar fichas en un archivo `.json`. |
-| **DM → Biblioteca** | Subir imágenes, mostrarlas en la mesa y llenar la Historia. |
+| **DM → Biblioteca** | Subir imágenes (llegan sin revelar), revelarlas en la Galería o mostrarlas en la mesa (eso también las revela) y llenar la Historia. |
 | **DM → Ajustes** | Nombre de la campaña, PIN del DM, PINs de los personajes y borrar la campaña. |
 
 ## Creador de personajes: formato de las listas

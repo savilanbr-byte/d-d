@@ -34,6 +34,7 @@ const ui = {
   editandoEnt: null, // { cat, id } de la entrada de Historia en edición
   pistaPara: null,
   prepCombate: false,
+  diarioDe: null,
   ultimoTurno: 'inicio',
   ocupado: false,
 };
@@ -553,10 +554,36 @@ const listasVistoDicho = (x, etiquetaVisto = 'Lo vimos') => `
   ${x.misterio ? `<p class="sub"><span class="tag misterio">Por descubrir</span></p><p style="margin:0">${esc(x.misterio)}</p>` : ''}`;
 const imgClic = (id, clase = '') => (srcDe(id) ? `<img class="${clase}" src="${srcDe(id)}" alt="${esc(imgs()[id].nombre)}" data-accion="ver-imagen" data-src="${esc(srcDe(id))}" loading="lazy">` : '');
 
+/* ---------- diario de cada jugador (lo ven él y el DM) ---------- */
+const entradasDiario = (id) => porOrden(S(id).diario, (x) => -(x.ts || 0));
+const contextoDiario = (x) => [x.dia ? `Día ${x.dia}` : '', x.momento && MOMENTOS[x.momento] ? MOMENTOS[x.momento].nombre : ''].filter(Boolean).join(' · ');
+const htmlEntradaDiario = (id, k, x, borrable) => `<div class="entrada"><time class="num" style="color:var(--tinta-suave)">${esc(contextoDiario(x) || hora(x.ts))}</time><p class="pre">${esc(x.texto)}</p>${borrable ? `<button type="button" class="borrar-entrada" data-accion="diario-borrar" data-id="${esc(id)}" data-k="${esc(k)}" aria-label="Borrar esta entrada">×</button>` : ''}</div>`;
+
+function htmlDiario() {
+  if (esDM()) {
+    const pjs = listaPj();
+    const sel = pjs.find(([id]) => id === ui.diarioDe) ? ui.diarioDe : (pjs[0] || [])[0];
+    return `<section class="pergamino" id="h-diario">
+      <h2 class="panel-titulo">Diarios del grupo</h2>
+      ${pjs.length ? `<div class="pj-chips" style="margin:0 0 10px">${pjs.map(([id]) => `<button type="button" class="chip chip-btn${id === sel ? ' activo' : ''}" style="--c:${F(id).color}" data-accion="diario-ver" data-id="${esc(id)}" aria-pressed="${id === sel}">${esc(F(id).nombre)} <span class="num">${entradasDiario(id).length}</span></button>`).join('')}</div>
+      <div class="bitacora">${entradasDiario(sel).map(([k, x]) => htmlEntradaDiario(sel, k, x, false)).join('') || `<p style="margin:0">${esc(F(sel).nombre)} todavía no ha escrito nada.</p>`}</div>` : '<p style="margin:0">Todavía no hay personajes.</p>'}
+    </section>`;
+  }
+  const yo = ui.yo && abierto(ui.yo) ? ui.yo : null;
+  if (!yo) return `<section class="pergamino" id="h-diario"><h2 class="panel-titulo">Mi diario</h2><p style="margin:0">Abre tu personaje en <a href="#ficha">Mi personaje</a> para escribir tu diario. Solo lo ven tú y el DM.</p></section>`;
+  return `<section class="pergamino" id="h-diario">
+    <h2 class="panel-titulo">Diario de ${esc(F(yo).nombre)}</h2>
+    <p style="margin:0 0 8px;font-size:15px;color:var(--tinta-suave)">Lo que escribas aquí solo lo ven tú y el DM.</p>
+    <label class="sr" for="diario-txt">Nueva entrada del diario</label>
+    <textarea class="campo campo-claro" id="diario-txt" data-borrador placeholder="Lo que viste, lo que sospechas, lo que planeas…">${val('diario-txt')}</textarea>
+    <div class="fila" style="margin:8px 0 12px"><button type="button" class="btn btn-oro" data-accion="diario-guardar">Guardar en mi diario</button></div>
+    <div class="bitacora">${entradasDiario(yo).map(([k, x]) => htmlEntradaDiario(yo, k, x, true)).join('') || '<p style="margin:0">Todavía no hay entradas.</p>'}</div>
+  </section>`;
+}
+
 function vistaHistoria() {
   const e = E.escena || {};
   const pistas = porOrden(E.pistas, (p) => p.ts || 0).map(([, p]) => p);
-  const bit = Object.values(E.bitacora || {}).sort((a, b) => b.ts - a.ts);
   const galeria = Object.entries(imgs()).filter(([, i]) => i.tipo !== 'mapa' && i.visible);
   const mist = visibles('misterios');
   const secciones = [
@@ -568,7 +595,7 @@ function vistaHistoria() {
     ['h-misterios', 'Misterios', mist.length && `<div class="pj-chips">${mist.filter(([, m]) => !m.resuelto).map(([, m]) => `<span class="chip conc">${esc(m.titulo)}</span>`).join('') || '<span class="tenue">Ninguno abierto.</span>'}</div>${mist.some(([, m]) => m.resuelto) ? `<p class="sub" style="margin-top:12px">Resueltos</p><div class="pj-chips">${mist.filter(([, m]) => m.resuelto).map(([, m]) => `<span class="chip resuelto">✓ ${esc(m.titulo)}</span>`).join('')}</div>` : ''}`],
     ['h-galeria', 'Galería', galeria.length && `<div class="galeria">${galeria.map(([, i]) => `<figure><img src="${i.src}" alt="${esc(i.nombre)}" data-accion="ver-imagen" data-src="${esc(i.src)}" loading="lazy"><figcaption>${esc(i.nombre)}</figcaption></figure>`).join('')}</div>`],
   ].filter((s) => s[2]);
-  return `${secciones.length ? `<nav class="indice" aria-label="Secciones de la historia">${[['h-escena', 'Dónde estamos'], ...secciones.map(([id, t]) => [id, t]), ['h-bitacora', 'Bitácora']].map(([id, t]) => `<button type="button" class="chip" data-accion="ir-seccion" data-id="${id}">${t}</button>`).join('')}</nav>` : ''}
+  return `${secciones.length ? `<nav class="indice" aria-label="Secciones de la historia">${[['h-escena', 'Dónde estamos'], ...secciones.map(([id, t]) => [id, t]), ['h-diario', esDM() ? 'Diarios' : 'Mi diario']].map(([id, t]) => `<button type="button" class="chip" data-accion="ir-seccion" data-id="${id}">${t}</button>`).join('')}</nav>` : ''}
   <div class="historia">
     <div class="columna">
       <section class="panel" id="h-escena">
@@ -585,10 +612,7 @@ function vistaHistoria() {
         <h2 class="panel-titulo">Pistas del grupo</h2>
         <div class="pistas">${pistas.length ? pistas.map(htmlPista).join('') : '<p class="tenue" style="margin:0">Todavía no hay pistas.</p>'}</div>
       </section>
-      <section class="pergamino" id="h-bitacora">
-        <h2 class="panel-titulo">Bitácora</h2>
-        <div class="bitacora">${bit.length ? bit.map((x) => `<div class="entrada${x.tipo === 'cambio' ? ' cambio' : ''}"><time class="num" style="color:var(--tinta-suave)">${hora(x.ts)}</time><p>${esc(x.texto)}</p></div>`).join('') : '<p style="margin:0">Aquí queda lo que narre el DM.</p>'}</div>
-      </section>
+      ${htmlDiario()}
     </div>
   </div>`;
 }
@@ -846,7 +870,7 @@ function dmBiblioteca() {
           <div><label class="etq" for="sub-archivo">Archivo</label><input class="campo" style="width:100%" type="file" id="sub-archivo" accept="image/*"></div>
           <div><label class="etq" for="sub-nombre">Nombre</label><input class="campo" style="width:100%" id="sub-nombre" data-borrador placeholder="Ej. Taberna del puerto" value="${val('sub-nombre')}"></div>
           <div><label class="etq" for="sub-tipo">Tipo</label><select class="campo" style="width:100%" id="sub-tipo" data-borrador>${Object.entries(TIPOS_IMG).map(([k, t]) => `<option value="${k}"${(ui.borradores['sub-tipo'] || 'ilustracion') === k ? ' selected' : ''}>${t}${k === 'mapa' ? ' (para mover fichas encima)' : k === 'retrato' ? ' (personajes y enemigos, se recorta cuadrado)' : ' (escenas y objetos)'}</option>`).join('')}</select></div>
-          <label class="check"><input type="checkbox" id="sub-visible" data-borrador-check${ui.borradores['sub-visible'] === false ? '' : ' checked'}> Mostrarla en la Galería de Historia</label>
+          <label class="check"><input type="checkbox" id="sub-visible" data-borrador-check${ui.borradores['sub-visible'] ? ' checked' : ''}> Revelarla ya en la Galería de los jugadores</label>
           <div class="fila"><button type="button" class="btn btn-oro" data-accion="subir" ${ui.ocupado ? 'disabled' : ''}>${ui.ocupado ? 'Subiendo…' : 'Subir a la Biblioteca'}</button></div>
           ${sync.modo === 'demo' ? '<p class="tenue" style="font-size:14px;margin:0">En el modo de demostración el navegador guarda poco espacio: prueba con pocas imágenes.</p>' : ''}
         </div>
@@ -859,12 +883,12 @@ function dmBiblioteca() {
           return `<p class="sub" style="margin-top:6px">${PLURAL_IMG[t]}</p>
           <div class="biblio">${lista.map(([k, i]) => `<div class="biblio-item${i.visible || t === 'mapa' ? '' : ' oculta'}">
             <img src="${i.src}" alt="" data-accion="ver-imagen" data-src="${esc(i.src)}" loading="lazy">
-            <div class="biblio-nombre">${esc(i.nombre)}${t !== 'mapa' && !i.visible ? ' <span class="tenue">(oculta)</span>' : ''}</div>
+            <div class="biblio-nombre">${esc(i.nombre)}${t !== 'mapa' ? (i.visible ? ' <span class="chip resuelto">Revelada</span>' : ' <span class="tenue">(sin revelar)</span>') : ''}</div>
             <div class="biblio-acc">
               ${t === 'mapa' ? `<button type="button" class="btn btn-peq" data-accion="mapa" data-k="${esc(k)}">Usar en la mesa</button>`
                 : ilu === k ? '<button type="button" class="btn btn-peq btn-oro" data-accion="mostrar" data-id="">Quitar de la mesa</button>'
                 : `<button type="button" class="btn btn-peq" data-accion="mostrar" data-id="${esc(k)}">Mostrar en la mesa</button>`}
-              ${t !== 'mapa' ? `<button type="button" class="btn btn-peq" data-accion="img-visible" data-id="${esc(k)}">${i.visible ? 'Ocultar' : 'Mostrar en Galería'}</button>` : ''}
+              ${t !== 'mapa' ? `<button type="button" class="btn btn-peq" data-accion="img-visible" data-id="${esc(k)}">${i.visible ? 'Ocultar de la Galería' : 'Revelar en la Galería'}</button>` : ''}
               ${botonConfirmar('borrar-img-' + k, 'Borrar', 'img-borrar', `data-id="${esc(k)}"`, 'btn btn-peq btn-peligro')}
             </div>
           </div>`).join('') || '<p class="tenue" style="margin:0">Ninguna.</p>'}</div>`;
@@ -1195,8 +1219,7 @@ const ACCIONES = {
     if (!Object.keys(part).length) { aviso('Marca al menos a un combatiente'); return; }
     E.combate = { ...C(), participantes: part };
     const primero = participantes()[0][0];
-    const ts = Date.now();
-    sync.escribir({ combate: { activo: true, ronda: 1, turno: primero, participantes: part }, [`bitacora/c${ts}`]: { ts, tipo: 'cambio', texto: 'Comienza el combate.' } });
+    sync.escribir({ combate: { activo: true, ronda: 1, turno: primero, participantes: part } });
     ui.prepCombate = false; limpiar('cb-'); limpiar('ini-'); aviso('¡Combate! Ronda 1');
   },
   turno(d) {
@@ -1225,8 +1248,7 @@ const ACCIONES = {
     limpiar('cb-add'); aviso(`${nombre} entra al combate`);
   },
   'fin-combate'() {
-    const ts = Date.now();
-    sync.escribir({ combate: { activo: false, ronda: 0, turno: '' }, [`bitacora/c${ts}`]: { ts, tipo: 'cambio', texto: `Fin del combate tras ${C().ronda || 1} ronda${(C().ronda || 1) === 1 ? '' : 's'}.` } });
+    sync.escribir({ combate: { activo: false, ronda: 0, turno: '' } });
     ui.confirmar = null; aviso('Combate terminado');
   },
 
@@ -1236,7 +1258,7 @@ const ACCIONES = {
     const orden = Object.keys(MOMENTOS); const a = E.ambiente || {};
     let i = orden.indexOf(a.momento || 'manana') + 1; let dia = +a.dia || 1;
     const u = {};
-    if (i >= orden.length) { i = 0; dia++; const ts = Date.now(); u[`bitacora/c${ts}`] = { ts, tipo: 'cambio', texto: `Comienza el día ${dia}.` }; }
+    if (i >= orden.length) { i = 0; dia++; }
     u['ambiente/momento'] = orden[i]; u['ambiente/dia'] = dia;
     sync.escribir(u); aviso(`${MOMENTOS[orden[i]].nombre}${i === 0 ? ` del día ${dia}` : ''}`);
   },
@@ -1252,10 +1274,22 @@ const ACCIONES = {
     const r = (E.relojes || {})[d.k]; if (!r) return;
     const i = +d.i; const nuevo = i < (r.llenos || 0) ? i : i + 1;
     const u = { [`relojes/${d.k}/llenos`]: nuevo };
-    if (nuevo >= r.segmentos && (r.llenos || 0) < r.segmentos) { const ts = Date.now(); u[`bitacora/c${ts}`] = { ts, tipo: 'cambio', texto: `Se cumplió el reloj: ${r.nombre}.` }; aviso(`¡${r.nombre}!`); }
+    if (nuevo >= r.segmentos && (r.llenos || 0) < r.segmentos) aviso(`¡${r.nombre}!`);
     sync.escribir(u);
   },
   'rl-borrar'(d) { sync.escribir({ [`relojes/${d.k}`]: null }); },
+
+  /* diario */
+  'diario-guardar'() {
+    const yo = ui.yo && abierto(ui.yo) ? ui.yo : null; if (!yo) return;
+    const texto = ($('#diario-txt').value || '').trim();
+    if (!texto) { aviso('Escribe algo primero'); $('#diario-txt').focus(); return; }
+    const a = E.ambiente || {}; const ts = Date.now();
+    sync.escribir({ [`personajes/${yo}/estado/diario/${nuevoId('d')}`]: { texto, ts, dia: a.dia || 1, momento: a.momento || '' } });
+    delete ui.borradores['diario-txt']; aviso('Guardado en tu diario');
+  },
+  'diario-borrar'(d) { if (!abierto(d.id)) return; sync.escribir({ [`personajes/${d.id}/estado/diario/${d.k}`]: null }); },
+  'diario-ver'(d) { ui.diarioDe = d.id; render(); },
 
   'pista-grupo'() { const t = ($('#pista-grupo').value || '').trim(); if (!t) { aviso('Escribe la pista'); return; } delete ui.borradores['pista-grupo']; sync.escribir({ [`pistas/${nuevoId('g')}`]: { texto: t, ts: Date.now() } }); },
   'pista-grupo-quitar'(d) { sync.escribir({ [`pistas/${d.k}`]: null }); },
@@ -1275,7 +1309,11 @@ const ACCIONES = {
     sync.escribir(u);
   },
   mapa(d) { sync.escribir({ 'escena/mapa': d.k, 'escena/ilustracion': '' }); aviso('La mesa muestra el mapa'); },
-  mostrar(d) { sync.escribir({ 'escena/ilustracion': d.id || '' }); aviso(d.id ? 'Se muestra en la mesa' : 'La mesa vuelve al mapa'); },
+  mostrar(d) {
+    const u = { 'escena/ilustracion': d.id || '' };
+    if (d.id && imgs()[d.id] && !imgs()[d.id].visible) u[`imagenes/${d.id}/visible`] = true; // lo que se muestra en la mesa ya quedó revelado
+    sync.escribir(u); aviso(d.id ? 'Se muestra en la mesa y queda revelada en la Galería' : 'La mesa vuelve al mapa');
+  },
   mover() { ui.moverFichas = !ui.moverFichas; render(); },
   'escena-guardar'() {
     const g = (id) => ($('#' + id).value || '').trim();
@@ -1286,9 +1324,7 @@ const ACCIONES = {
   'no-confirmar'() { ui.confirmar = null; render(); },
   descanso(d) {
     const u = descansoUpdates(d.tipo);
-    const ts = Date.now();
     const texto = d.tipo === 'largo' ? 'Descanso largo: PV, espacios y rasgos recuperados.' : 'Descanso corto: rasgos de descanso corto recuperados.';
-    u[`bitacora/c${ts}`] = { ts, tipo: 'cambio', texto };
     ui.confirmar = null; sync.escribir(u); aviso(texto);
   },
   'ir-seccion'(d) { const el = document.getElementById(d.id); if (el) el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); },
@@ -1304,7 +1340,7 @@ const ACCIONES = {
     ui.ocupado = true; render();
     try {
       const src = await comprimir(file, tipo);
-      const visible = $('#sub-visible') ? $('#sub-visible').checked : true;
+      const visible = $('#sub-visible') ? $('#sub-visible').checked : false;
       await sync.escribir({ [`imagenes/${nuevoId('im')}`]: { nombre, tipo, src, visible } });
       delete ui.borradores['sub-nombre'];
       const a = $('#sub-archivo'); if (a) a.value = '';
@@ -1421,11 +1457,19 @@ const CAMBIOS = {
   async importar(t) { const f = t.files && t.files[0]; t.value = ''; if (f) await importarFichas(f); },
 };
 
+// Ejecuta una acción y vuelve a dibujar al final, para que los formularios se limpien
+// aunque la escritura haya redibujado antes de borrar el borrador.
+function ejecutar(fn, datos) {
+  let r;
+  try { r = fn(datos); } finally { if (!(r && typeof r.then === 'function')) render(); }
+  if (r && typeof r.then === 'function') r.finally(() => render());
+}
+
 document.addEventListener('click', (ev) => {
   const b = ev.target.closest('[data-accion]');
   if (!b) { if (ev.target.id === 'capa') ACCIONES['cerrar-capa'](); return; }
   const fn = ACCIONES[b.dataset.accion];
-  if (fn) { ev.preventDefault(); fn({ ...b.dataset }); }
+  if (fn) { ev.preventDefault(); ejecutar(fn, { ...b.dataset }); }
 });
 document.addEventListener('input', (ev) => {
   const t = ev.target;
@@ -1445,7 +1489,7 @@ document.addEventListener('focusout', (ev) => {
 });
 document.addEventListener('keydown', (ev) => {
   const t = ev.target;
-  if (ev.key === 'Enter' && t.dataset && t.dataset.enter) { ev.preventDefault(); ACCIONES[t.dataset.enter]({ ...t.dataset }); return; }
+  if (ev.key === 'Enter' && t.dataset && t.dataset.enter) { ev.preventDefault(); ejecutar(ACCIONES[t.dataset.enter], { ...t.dataset }); return; }
   if (ev.key === 'Escape' && !$('#capa').hidden) { ACCIONES['cerrar-capa'](); return; }
   const enPin = (ui.ruta === 'ficha' && ui.ver && F(ui.ver).nombre && !puedeVer(ui.ver) && !ui.editandoPj) || (ui.ruta === 'dm' && (E.campana || {}).pinDM && !esDM());
   if (enPin && !/INPUT|TEXTAREA|SELECT/.test(t.tagName)) {
