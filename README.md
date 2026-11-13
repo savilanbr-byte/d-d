@@ -19,7 +19,7 @@ Dirección de la app: https://savilanbr-byte.github.io/d-d/
 | **Mi personaje** | Ficha viva: PV, espacios de conjuro, concentración, recursos con usos, estados, ataques, conjuros, pistas privadas, notas, atributos, rasgos y equipo. Se edita con **Editar ficha**. |
 | **Historia** | Enciclopedia de la campaña (mundo, personajes no jugadores, lugares, objetos, inscripciones, misterios), galería, pistas del grupo y bitácora. |
 | **DM → Mesa** | Narrar en la pantalla, pistas del grupo, enemigos y aliados en escena, mapa y fichas, escena y descansos. |
-| **DM → Personajes** | Crear, editar y borrar fichas, ver cualquier ficha y mandar pistas privadas. |
+| **DM → Personajes** | Crear, editar y borrar fichas, ver cualquier ficha, mandar pistas privadas, anotar secretos del DM (no los ve el jugador) e importar o exportar fichas en un archivo `.json`. |
 | **DM → Biblioteca** | Subir imágenes, mostrarlas en la mesa y llenar la Historia. |
 | **DM → Ajustes** | Nombre de la campaña, PIN del DM, PINs de los personajes y borrar la campaña. |
 
@@ -33,6 +33,27 @@ Dirección de la app: https://savilanbr-byte.github.io/d-d/
 | Conjuros | `1 \| Curar heridas \| descripción` (el primer número es el nivel) |
 | Recursos con usos | `Segundo aliento \| 1 \| corto \| detalle opcional` (recarga: corto, largo o ninguna) |
 | Equipo | `Cota de malla` |
+
+## Importar fichas
+
+En **DM → Personajes → Importar fichas** se carga un archivo `.json` con este formato. Lo que no se sepa se deja vacío (`""`) y la app lo muestra como pendiente. Si el PIN falta o ya lo usa otro, la app asigna uno nuevo. Si ya existe un personaje con el mismo nombre, no se duplica.
+
+```json
+{
+  "formato": "mesa-del-dm/personajes",
+  "version": 1,
+  "personajes": [
+    {
+      "ficha": { "nombre": "Nombre", "raza": "", "clase": "", "nivel": 1, "pin": "1234", "pvMax": 10,
+                 "atributos": { "FUE": 10, "DES": 10, "CON": 10, "INT": 10, "SAB": 10, "CAR": 10 },
+                 "rasgos": [{ "nombre": "Rasgo", "texto": "Descripción" }], "hitos": ["Algo que pasó"] },
+      "secretos": "Lo que solo sabe el DM"
+    }
+  ]
+}
+```
+
+**Exportar fichas** descarga ese mismo archivo con todos los personajes (incluye retratos y secretos), útil como respaldo.
 
 ## Archivos
 

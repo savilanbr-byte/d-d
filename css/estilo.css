@@ -432,3 +432,11 @@ input[type="file"].campo { padding: 7px; font-size: 14px; }
 .zona-peligro { border-color: rgba(224, 86, 75, .5); }
 .zona-peligro .panel-titulo { color: #f0a29b; }
 .seg { flex-wrap: wrap; }
+
+/* ---------- secretos del DM y textos largos ---------- */
+.pre { white-space: pre-line; }
+details.secretos { margin-top: 10px; border: 1px solid rgba(161, 123, 255, .4); border-radius: 8px; background: rgba(161, 123, 255, .08); padding: 8px 12px; }
+details.secretos summary { cursor: pointer; font-family: var(--f-etiqueta); color: #d9caff; letter-spacing: .04em; }
+details.secretos p { margin: 8px 0 2px; font-size: 15px; }
+.lista-campo.secreto { padding: 12px; border-radius: 8px; border: 1px dashed rgba(161, 123, 255, .5); background: rgba(161, 123, 255, .06); }
+label.btn { cursor: pointer; }

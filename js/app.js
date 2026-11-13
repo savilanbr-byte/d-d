@@ -60,7 +60,10 @@ const porOrden = (obj, campo = (x) => x.orden) => Object.entries(obj || {}).sort
 const listaPj = () => porOrden(E.personajes, (p) => (p.ficha || {}).orden).filter(([, p]) => p.ficha);
 const F = (id) => ((E.personajes || {})[id] || {}).ficha || {};
 const S = (id) => ((E.personajes || {})[id] || {}).estado || {};
-const pvDe = (id) => { const f = F(id); const v = S(id).pv; return Math.min(f.pvMax || 0, v ?? f.pvMax ?? 0); };
+const tienePv = (id) => +F(id).pvMax > 0;
+const pvDe = (id) => { const f = F(id); const v = S(id).pv; return Math.min(+f.pvMax || 0, v ?? +f.pvMax ?? 0); };
+const dato = (v) => (v === '' || v == null ? '—' : v);
+const secretosDe = (id) => (((E.personajes || {})[id] || {}).dm || {}).secretos || '';
 const espDe = (id, n) => { const max = +((F(id).espacios || {})['n' + n] || 0); const v = (S(id).espacios || {})['n' + n]; return Math.min(max, v ?? max); };
 const recDe = (id, r) => { const v = (S(id).recursos || {})[r.id]; return Math.min(r.max, v ?? r.max); };
 const pinDe = (id) => (id === 'dm' ? (E.campana || {}).pinDM : F(id).pin);
@@ -118,10 +121,10 @@ function pjMini(id) {
   return `<button type="button" class="pj" style="--c:${f.color};text-align:left" data-accion="elegir" data-id="${esc(id)}">
     ${avatar(id)}
     <div>
-      <div class="pj-fila"><span class="pj-nombre">${esc(f.nombre)}${ui.yo === id ? '<span class="tu">TÚ</span>' : ''}</span><span class="pv-num num"><b>${pv}</b>/${f.pvMax} PV</span></div>
-      <div class="pj-fila"><span class="pj-clase">${esc([f.raza, f.clase].filter(Boolean).join(' · '))}</span><span class="pj-clase num">CA ${esc(f.ca)}</span></div>
-      <div class="barra-pv ${nivelPv(pv, f.pvMax)}"><span style="width:${pct(pv, f.pvMax)}%"></span></div>
-      ${(s.concentra || est.length || pv <= 0) ? `<div class="pj-chips">${pv <= 0 ? '<span class="chip malo">Inconsciente</span>' : ''}${s.concentra ? `<span class="chip conc">◈ ${esc(s.concentra)}</span>` : ''}${est.map((x) => `<span class="chip est">${esc(x)}</span>`).join('')}</div>` : ''}
+      <div class="pj-fila"><span class="pj-nombre">${esc(f.nombre)}${ui.yo === id ? '<span class="tu">TÚ</span>' : ''}</span><span class="pv-num num">${tienePv(id) ? `<b>${pv}</b>/${f.pvMax} PV` : 'PV por definir'}</span></div>
+      <div class="pj-fila"><span class="pj-clase">${esc([f.raza, f.clase].filter(Boolean).join(' · '))}</span><span class="pj-clase num">CA ${esc(dato(f.ca))}</span></div>
+      ${tienePv(id) ? `<div class="barra-pv ${nivelPv(pv, f.pvMax)}"><span style="width:${pct(pv, f.pvMax)}%"></span></div>` : ''}
+      ${(s.concentra || est.length || (tienePv(id) && pv <= 0)) ? `<div class="pj-chips">${tienePv(id) && pv <= 0 ? '<span class="chip malo">Inconsciente</span>' : ''}${s.concentra ? `<span class="chip conc">◈ ${esc(s.concentra)}</span>` : ''}${est.map((x) => `<span class="chip est">${esc(x)}</span>`).join('')}</div>` : ''}
     </div>
   </button>`;
 }
@@ -230,7 +233,7 @@ function vistaHoja(id) {
   const niveles = Array.from({ length: 9 }, (_, i) => i + 1).filter((n) => +((f.espacios || {})['n' + n] || 0) > 0);
   const conjPorNivel = {};
   for (const c of f.conjuros || []) (conjPorNivel[c.nivel || 1] = conjPorNivel[c.nivel || 1] || []).push(c);
-  const datos = [f.raza, f.clase, f.nivel ? `Nivel ${f.nivel}` : '', f.edad].filter(Boolean).join(' · ');
+  const datos = [f.raza, [f.clase, f.subclase].filter(Boolean).join(' · '), f.nivel ? `Nivel ${f.nivel}` : '', f.edad, f.alineamiento].filter(Boolean).join(' · ');
   return `<div class="hoja" style="--c:${f.color}">
     <section class="panel ancho cabeza">
       ${avatar(id, 'cabeza-avatar')}
@@ -249,7 +252,7 @@ function vistaHoja(id) {
     <div class="columna">
       <section class="panel">
         <h2 class="panel-titulo">Puntos de vida</h2>
-        <div class="pv-grande">
+        ${tienePv(id) ? `<div class="pv-grande">
           <div class="pv-cifra num">${pv}<small> / ${f.pvMax}</small></div>
           <div class="pv-ajuste">
             <button type="button" class="btn btn-red btn-peligro" data-accion="pv" data-id="${esc(id)}" data-d="-1" aria-label="Restar 1 PV">−</button>
@@ -262,10 +265,10 @@ function vistaHoja(id) {
           <input id="pv-cant" type="number" inputmode="numeric" min="1" max="999" placeholder="0" data-borrador value="${esc(ui.borradores['pv-cant'] ?? '')}">
           <button type="button" class="btn btn-peligro" data-accion="pv-cant" data-id="${esc(id)}" data-tipo="dano">Recibir daño</button>
           <button type="button" class="btn btn-bien" data-accion="pv-cant" data-id="${esc(id)}" data-tipo="cura">Curar</button>
-        </div>
+        </div>` : '<p class="tenue" style="margin:0">Los PV máximos están por definir. Agrégalos con «Editar ficha».</p>'}
         <div class="vitales" style="margin-top:14px">
-          <div class="vital"><b class="num">${esc(f.ca)}</b><span>CA</span>${f.caNota ? `<small>${esc(f.caNota)}</small>` : ''}</div>
-          <div class="vital"><b class="num">${esc(f.iniciativa || '+0')}</b><span>Iniciativa</span></div>
+          <div class="vital"><b class="num">${esc(dato(f.ca))}</b><span>CA</span>${f.caNota ? `<small>${esc(f.caNota)}</small>` : ''}</div>
+          <div class="vital"><b class="num">${esc(dato(f.iniciativa))}</b><span>Iniciativa</span></div>
           <div class="vital"><b>${esc(f.velocidad || '—')}</b><span>Velocidad</span></div>
           <div class="vital"><b class="num">${esc(f.cd || f.competencia || '+2')}</b><span>${f.cd ? 'CD conjuros' : 'Competencia'}</span></div>
         </div>
@@ -315,7 +318,7 @@ function vistaHoja(id) {
 
       <section class="panel">
         <h2 class="panel-titulo">Atributos</h2>
-        <div class="atributos">${ATRIBUTOS.map((k) => { const v = +((f.atributos || {})[k] ?? 10); return `<div class="atr"><span>${k}</span><b class="num">${v}</b><small class="num">${mod(v)}</small></div>`; }).join('')}</div>
+        <div class="atributos">${ATRIBUTOS.map((k) => { const raw = (f.atributos || {})[k]; const ok = raw !== '' && raw != null; return `<div class="atr"><span>${k}</span><b class="num">${ok ? +raw : '—'}</b><small class="num">${ok ? mod(+raw) : '?'}</small></div>`; }).join('')}</div>
         ${((f.salvaciones || []).length || (f.habilidades || []).length) ? `<div class="dos-col" style="margin-top:16px">
           ${(f.salvaciones || []).length ? `<div><p class="sub">Tiradas de salvación</p><ul class="lista">${f.salvaciones.map((x) => `<li><span>${esc(x.nombre)}</span><span class="val">${esc(x.valor)}</span></li>`).join('')}</ul></div>` : ''}
           ${(f.habilidades || []).length ? `<div><p class="sub">Habilidades</p><ul class="lista">${f.habilidades.map((x) => `<li><span>${esc(x.nombre)}</span><span class="val">${esc(x.valor)}</span></li>`).join('')}</ul></div>` : ''}
@@ -336,11 +339,14 @@ function vistaHoja(id) {
         ${(f.equipo || []).length ? `<p class="sub" style="margin-top:14px">Equipo base</p><p style="margin:0;color:var(--tenue);font-size:15px">${f.equipo.map(esc).join(' · ')}</p>` : ''}
       </section>
 
-      ${(f.personalidad || f.objetivo || f.origen) ? `<section class="panel">
+      ${(f.personalidad || f.objetivo || f.origen || f.apariencia || f.historia || (f.hitos || []).length) ? `<section class="panel">
         <h2 class="panel-titulo">Quién es</h2>
         ${f.origen ? `<div class="rasgo"><b>Origen</b><p>${esc(f.origen)}</p></div>` : ''}
+        ${f.apariencia ? `<div class="rasgo"><b>Apariencia</b><p>${esc(f.apariencia)}</p></div>` : ''}
         ${f.personalidad ? `<div class="rasgo"><b>Personalidad</b><p>${esc(f.personalidad)}</p></div>` : ''}
+        ${f.historia ? `<div class="rasgo"><b>Historia</b><p class="pre">${esc(f.historia)}</p></div>` : ''}
         ${f.objetivo ? `<div class="rasgo"><b>Objetivo</b><p>${esc(f.objetivo)}</p></div>` : ''}
+        ${(f.hitos || []).length ? `<div class="rasgo"><b>Momentos importantes</b><ul class="vinetas">${f.hitos.map((h) => `<li>${esc(h)}</li>`).join('')}</ul></div>` : ''}
       </section>` : ''}
       ${f.cita ? `<p class="cita">«${esc(f.cita)}»</p>` : ''}
     </div>
@@ -357,6 +363,7 @@ const LISTAS = {
   rasgos: { etq: 'Rasgos', ayuda: 'Uno por línea: Nombre: descripción', ej: 'Visión en la oscuridad: Ves hasta 18 m sin luz.' },
   recursos: { etq: 'Recursos con usos', ayuda: 'Uno por línea: Nombre | máximo | recarga (corto, largo o ninguna) | detalle opcional', ej: 'Segundo aliento | 1 | corto | Recuperas 1d10 + nivel PV\nFlechas | 20 | ninguna' },
   equipo: { etq: 'Equipo base', ayuda: 'Uno por línea', ej: 'Cota de malla\nMochila de explorador' },
+  hitos: { etq: 'Momentos importantes', ayuda: 'Uno por línea', ej: 'Encontró la llave del faro' },
 };
 
 function listaATexto(campo, arr) {
@@ -386,13 +393,16 @@ function textoALista(campo, texto) {
   });
 }
 
+const CAMPOS_TEXTO = ['nombre', 'epiteto', 'raza', 'clase', 'subclase', 'genero', 'alineamiento', 'nivel', 'edad', 'origen', 'color', 'pin', 'retrato', 'pvMax', 'ca', 'caNota', 'velocidad', 'iniciativa', 'competencia', 'cd', 'ataqueConjuro', 'apariencia', 'personalidad', 'historia', 'objetivo', 'cita'];
+
 function cargarEditor(id) {
   for (const k of Object.keys(ui.borradores)) if (k.startsWith('pj-')) delete ui.borradores[k];
   const usados = listaPj().map(([, p]) => p.ficha.color);
   const f = id === 'nuevo' ? fichaVacia(COLORES.find((c) => !usados.includes(c)) || COLORES[0]) : { ...fichaVacia(), ...F(id) };
   const b = ui.borradores;
-  for (const k of ['nombre', 'epiteto', 'raza', 'clase', 'nivel', 'edad', 'origen', 'color', 'pin', 'retrato', 'pvMax', 'ca', 'caNota', 'velocidad', 'iniciativa', 'competencia', 'cd', 'ataqueConjuro', 'personalidad', 'objetivo', 'cita']) b['pj-' + k] = f[k] ?? '';
-  for (const a of ATRIBUTOS) b['pj-atr-' + a] = (f.atributos || {})[a] ?? 10;
+  for (const k of CAMPOS_TEXTO) b['pj-' + k] = f[k] ?? '';
+  b['pj-secretos'] = id === 'nuevo' ? '' : secretosDe(id);
+  for (const a of ATRIBUTOS) b['pj-atr-' + a] = (f.atributos || {})[a] ?? '';
   for (let n = 1; n <= 9; n++) b['pj-esp-' + n] = (f.espacios || {})['n' + n] || '';
   for (const k of Object.keys(LISTAS)) b['pj-' + k] = listaATexto(k, f[k]);
   ui.editandoPj = id;
@@ -410,8 +420,11 @@ function vistaEditor() {
       ${campo('epiteto', 'Epíteto (ej. El sabio ancestral)')}
       ${campo('raza', 'Raza')}
       ${campo('clase', 'Clase')}
+      ${campo('subclase', 'Subclase')}
       ${campo('nivel', 'Nivel', 'type="number" min="1" max="20" inputmode="numeric"')}
       ${campo('edad', 'Edad')}
+      ${campo('genero', 'Género')}
+      ${campo('alineamiento', 'Alineamiento')}
       ${campo('pin', 'PIN de 4 dígitos *', 'inputmode="numeric" maxlength="4" pattern="[0-9]{4}" autocomplete="off"')}
     </div>
     <div class="form-fila">
@@ -422,7 +435,7 @@ function vistaEditor() {
 
     <p class="sub">Combate</p>
     <div class="form-grid">
-      ${campo('pvMax', 'PV máximos *', 'type="number" min="1" inputmode="numeric"')}
+      ${campo('pvMax', 'PV máximos', 'type="number" min="1" inputmode="numeric"')}
       ${campo('ca', 'Clase de armadura', 'type="number" min="0" inputmode="numeric"')}
       ${campo('caNota', 'Nota de la CA (ej. cota + escudo)')}
       ${campo('velocidad', 'Velocidad')}
@@ -432,7 +445,7 @@ function vistaEditor() {
       ${campo('ataqueConjuro', 'Ataque de conjuro (si lanza)')}
     </div>
 
-    <p class="sub">Atributos</p>
+    <p class="sub">Atributos <span class="tenue" style="font-family:var(--f-cuerpo);letter-spacing:0">(deja vacío lo que no esté definido)</span></p>
     <div class="form-grid seis">${ATRIBUTOS.map((a) => `<div><label class="etq" for="pj-atr-${a}" title="${NOMBRE_ATRIBUTO[a]}">${a}</label><input class="campo num" id="pj-atr-${a}" type="number" min="1" max="30" inputmode="numeric" data-borrador value="${b('atr-' + a)}"></div>`).join('')}</div>
 
     <p class="sub">Espacios de conjuro por nivel <span class="tenue" style="font-family:var(--f-cuerpo);letter-spacing:0">(deja vacío si no tiene)</span></p>
@@ -445,8 +458,9 @@ function vistaEditor() {
       ${campo('origen', 'Origen')}
       ${campo('objetivo', 'Objetivo')}
     </div>
-    <div class="lista-campo"><label class="etq" for="pj-personalidad">Personalidad</label><textarea class="campo" id="pj-personalidad" data-borrador style="min-height:70px">${b('personalidad')}</textarea></div>
+    ${['apariencia', 'personalidad', 'historia'].map((k) => `<div class="lista-campo"><label class="etq" for="pj-${k}">${{ apariencia: 'Apariencia', personalidad: 'Personalidad', historia: 'Historia' }[k]}</label><textarea class="campo" id="pj-${k}" data-borrador style="min-height:${k === 'historia' ? 110 : 70}px">${b(k)}</textarea></div>`).join('')}
     ${campo('cita', 'Frase o cita')}
+    ${esDM() ? `<div class="lista-campo secreto"><label class="etq" for="pj-secretos">Secretos del DM</label><p class="ayuda">Solo se ven en el panel del DM. El jugador no los ve en su ficha.</p><textarea class="campo" id="pj-secretos" data-borrador style="min-height:90px">${b('secretos')}</textarea></div>` : ''}
 
     <div class="fila" style="margin-top:16px">
       <button type="button" class="btn btn-oro" data-accion="pj-guardar" ${ui.ocupado ? 'disabled' : ''}>${ui.ocupado ? 'Guardando…' : nuevo ? 'Crear personaje' : 'Guardar ficha'}</button>
@@ -623,19 +637,25 @@ function dmPersonajes() {
   if (ui.editandoPj) return vistaEditor();
   const pjs = listaPj();
   return `<div class="columna">
-    <div class="fila-sep"><p class="tenue" style="margin:0">Crea las fichas aquí o deja que cada jugador cree la suya desde Mi personaje.</p><button type="button" class="btn btn-oro" data-accion="pj-nuevo">Crear personaje</button></div>
+    <div class="fila-sep"><p class="tenue" style="margin:0">Crea las fichas aquí o deja que cada jugador cree la suya desde Mi personaje.</p>
+      <div class="fila">
+        <label class="btn" for="imp-archivo">Importar fichas</label><input type="file" id="imp-archivo" class="sr" accept=".json,application/json" data-cambio="importar">
+        ${pjs.length ? '<button type="button" class="btn" data-accion="exportar">Exportar fichas</button>' : ''}
+        <button type="button" class="btn btn-oro" data-accion="pj-nuevo">Crear personaje</button>
+      </div></div>
     ${pjs.length ? '' : '<div class="vacio">Todavía no hay personajes.</div>'}
     <div class="dm-pjs">${pjs.map(([id]) => {
       const f = F(id); const pv = pvDe(id);
       return `<section class="panel dm-pj" style="--c:${f.color}">
         <div class="dm-pj-cab">${avatar(id)}<div style="min-width:0;flex:1"><div class="pj-nombre">${esc(f.nombre)}</div><div class="pj-clase">${esc([f.raza, f.clase, f.nivel ? 'Nivel ' + f.nivel : ''].filter(Boolean).join(' · '))}</div>
-          <div class="barra-pv ${nivelPv(pv, f.pvMax)}"><span style="width:${pct(pv, f.pvMax)}%"></span></div><div class="pj-clase num" style="margin-top:4px">${pv}/${f.pvMax} PV · CA ${esc(f.ca)} · PIN <b class="num" style="color:var(--oro-claro)">${esc(f.pin)}</b></div></div></div>
+          ${tienePv(id) ? `<div class="barra-pv ${nivelPv(pv, f.pvMax)}"><span style="width:${pct(pv, f.pvMax)}%"></span></div>` : ''}<div class="pj-clase num" style="margin-top:4px">${tienePv(id) ? `${pv}/${f.pvMax} PV` : 'PV por definir'} · CA ${esc(dato(f.ca))} · PIN <b class="num" style="color:var(--oro-claro)">${esc(f.pin)}</b></div></div></div>
         <div class="fila" style="margin-top:10px">
           <button type="button" class="btn btn-peq" data-accion="pj-ver" data-id="${esc(id)}">Ver ficha</button>
           <button type="button" class="btn btn-peq" data-accion="pj-editar" data-id="${esc(id)}">Editar</button>
           <button type="button" class="btn btn-peq" data-accion="pista-abrir" data-id="${esc(id)}">Pista privada</button>
           ${botonConfirmar('borrar-pj-' + id, 'Borrar', 'pj-borrar', `data-id="${esc(id)}"`, 'btn btn-peq btn-peligro')}
         </div>
+        ${secretosDe(id) ? `<details class="secretos"><summary>Secretos del DM</summary><p class="pre">${esc(secretosDe(id))}</p></details>` : ''}
         ${ui.pistaPara === id ? `<div class="columna" style="gap:8px;margin-top:10px">
           <label class="etq" for="pista-txt">Pista que solo verá ${esc(f.nombre)}</label>
           <textarea class="campo" id="pista-txt" data-borrador style="min-height:70px">${val('pista-txt')}</textarea>
@@ -878,7 +898,7 @@ function descansoUpdates(tipo) {
   for (const [id, p] of Object.entries(E.personajes || {})) {
     const f = p.ficha || {}; const b = `personajes/${id}/estado`;
     if (tipo === 'largo') {
-      u[`${b}/pv`] = f.pvMax;
+      if (+f.pvMax > 0) u[`${b}/pv`] = +f.pvMax;
       for (let n = 1; n <= 9; n++) if (+((f.espacios || {})['n' + n] || 0) > 0) u[`${b}/espacios/n${n}`] = +f.espacios['n' + n];
       u[`${b}/concentra`] = '';
     }
@@ -903,12 +923,12 @@ const ACCIONES = {
   'cerrar-capa'() { const c = $('#capa'); c.hidden = true; c.innerHTML = ''; },
 
   /* ficha */
-  pv(d) { const f = F(d.id); escribirEstado(d.id, 'pv', Math.max(0, Math.min(f.pvMax, pvDe(d.id) + +d.d))); },
+  pv(d) { const f = F(d.id); if (!tienePv(d.id)) return; escribirEstado(d.id, 'pv', Math.max(0, Math.min(+f.pvMax, pvDe(d.id) + +d.d))); },
   'pv-cant'(d) {
     const n = parseInt($('#pv-cant').value, 10);
     if (!n || n < 0) { aviso('Escribe una cantidad primero'); $('#pv-cant').focus(); return; }
     const f = F(d.id); const actual = pvDe(d.id);
-    const v = d.tipo === 'dano' ? Math.max(0, actual - n) : Math.min(f.pvMax, actual + n);
+    const v = d.tipo === 'dano' ? Math.max(0, actual - n) : Math.min(+f.pvMax, actual + n);
     delete ui.borradores['pv-cant'];
     escribirEstado(d.id, 'pv', v);
     aviso(d.tipo === 'dano' ? `−${n} PV` : `+${v - actual} PV`);
@@ -929,6 +949,7 @@ const ACCIONES = {
   'pj-editar'(d) { cargarEditor(d.id); render(); window.scrollTo(0, 0); },
   'pj-ver'(d) { ui.ver = d.id; ui.editandoPj = null; location.hash = 'ficha'; },
   'pj-color'(d) { ui.borradores['pj-color'] = d.c; render(); },
+  exportar() { exportarFichas(); },
   'pj-cancelar'() { ui.editandoPj = null; limpiar('pj-'); render(); window.scrollTo(0, 0); },
   async 'pj-guardar'() {
     const b = ui.borradores;
@@ -939,16 +960,17 @@ const ACCIONES = {
     if (!nombre) { aviso('Ponle nombre al personaje'); $('#pj-nombre').focus(); return; }
     if (!pin4(pin)) { aviso('El PIN debe tener 4 números'); $('#pj-pin').focus(); return; }
     if (listaPj().some(([oid, p]) => oid !== id && p.ficha.pin === pin) || pin === (E.campana || {}).pinDM) { aviso('Ese PIN ya lo usa otro. Elige uno distinto.'); $('#pj-pin').focus(); return; }
-    if (!pvMax || pvMax < 1) { aviso('Escribe los PV máximos'); $('#pj-pvMax').focus(); return; }
     const previo = nuevo ? {} : F(id);
+    const num = (k) => { const v = parseInt(g(k), 10); return Number.isFinite(v) ? v : ''; };
     const ficha = {
-      nombre, epiteto: g('epiteto'), raza: g('raza'), clase: g('clase'), nivel: parseInt(g('nivel'), 10) || 1, edad: g('edad'), origen: g('origen'),
+      nombre, epiteto: g('epiteto'), raza: g('raza'), clase: g('clase'), subclase: g('subclase'), genero: g('genero'), alineamiento: g('alineamiento'),
+      nivel: num('nivel') || 1, edad: g('edad'), origen: g('origen'),
       color: g('color') || COLORES[0], pin, retrato: g('retrato'),
-      pvMax, ca: parseInt(g('ca'), 10) || 10, caNota: g('caNota'), velocidad: g('velocidad'), iniciativa: g('iniciativa'), competencia: g('competencia'),
+      pvMax: pvMax > 0 ? pvMax : '', ca: num('ca'), caNota: g('caNota'), velocidad: g('velocidad'), iniciativa: g('iniciativa'), competencia: g('competencia'),
       cd: g('cd'), ataqueConjuro: g('ataqueConjuro'),
-      atributos: Object.fromEntries(ATRIBUTOS.map((a) => [a, parseInt(b['pj-atr-' + a], 10) || 10])),
+      atributos: Object.fromEntries(ATRIBUTOS.map((a) => { const v = parseInt(b['pj-atr-' + a], 10); return [a, Number.isFinite(v) ? v : '']; })),
       espacios: Object.fromEntries(Array.from({ length: 9 }, (_, i) => i + 1).map((n) => ['n' + n, parseInt(b['pj-esp-' + n], 10) || 0]).filter(([, v]) => v > 0)),
-      personalidad: g('personalidad'), objetivo: g('objetivo'), cita: g('cita'),
+      apariencia: g('apariencia'), personalidad: g('personalidad'), historia: g('historia'), objetivo: g('objetivo'), cita: g('cita'),
       orden: previo.orden || Date.now(),
     };
     for (const k of Object.keys(LISTAS)) ficha[k] = textoALista(k, b['pj-' + k]);
@@ -964,7 +986,8 @@ const ACCIONES = {
         ficha.retrato = rid;
       }
       u[`personajes/${id}/ficha`] = ficha;
-      if (nuevo) u[`personajes/${id}/estado`] = { pv: pvMax, oro: 0, notas: '' };
+      if (nuevo) u[`personajes/${id}/estado`] = { pv: pvMax > 0 ? pvMax : 0, oro: 0, notas: '' };
+      if (esDM()) u[`personajes/${id}/dm`] = { secretos: g('secretos') };
       await sync.escribir(u);
       avisarEspacio();
       if (nuevo && !esDM()) { ui.desbloqueos[id] = pin; guardarDesbloqueos(); ui.yo = id; ls.set('mesa-yo', id); }
@@ -1119,7 +1142,60 @@ const ACCIONES = {
   async 'borrar-todo'() { ui.confirmar = null; ui.desbloqueos = {}; guardarDesbloqueos(); ui.yo = null; ui.ver = null; ls.set('mesa-yo', ''); ui.borradores = {}; await sync.reiniciar(); location.hash = 'mesa'; aviso('La campaña se borró'); },
 };
 
-const CAMBIOS = { 'ent-cat'() { render(); } };
+// Importar y exportar fichas (.json)
+const FORMATO = 'mesa-del-dm/personajes';
+function pinLibre(usados) {
+  for (let i = 0; i < 200; i++) { const p = String(1000 + Math.floor(Math.random() * 9000)); if (!usados.has(p)) return p; }
+  return '0000';
+}
+async function importarFichas(file) {
+  let datos;
+  try { datos = JSON.parse(await file.text()); } catch (e) { aviso('Ese archivo no es un JSON válido'); return; }
+  const lista = Array.isArray(datos) ? datos : datos && datos.personajes;
+  if (!Array.isArray(lista) || !lista.length) { aviso('El archivo no trae personajes'); return; }
+  const usados = new Set([...listaPj().map(([, p]) => String(p.ficha.pin)), String((E.campana || {}).pinDM || '')]);
+  const nombres = new Set(listaPj().map(([, p]) => norm(p.ficha.nombre)));
+  const colores = listaPj().map(([, p]) => p.ficha.color);
+  const u = {}; const creados = []; const saltados = []; const pinesNuevos = [];
+  lista.forEach((x, i) => {
+    const base = (x && x.ficha) || x || {};
+    if (!base.nombre) return;
+    if (nombres.has(norm(base.nombre))) { saltados.push(base.nombre); return; }
+    const id = nuevoId('pj');
+    const color = base.color || COLORES.find((c) => !colores.includes(c)) || COLORES[i % COLORES.length];
+    colores.push(color);
+    const ficha = { ...fichaVacia(color), ...base, color, retrato: '', orden: Date.now() + i };
+    ficha.recursos = (ficha.recursos || []).map((r) => ({ ...r, id: r.id || claveSegura(norm(r.nombre).replace(/ /g, '-')), max: +r.max || 1 }));
+    let pin = String(ficha.pin || '');
+    if (!pin4(pin) || usados.has(pin)) { pin = pinLibre(usados); pinesNuevos.push(ficha.nombre); }
+    ficha.pin = pin; usados.add(pin); nombres.add(norm(ficha.nombre));
+    if (x.retratoSrc && /^data:image\//.test(x.retratoSrc)) { const rid = 'rt' + id; u[`imagenes/${rid}`] = { nombre: `Retrato de ${ficha.nombre}`, tipo: 'retrato', src: x.retratoSrc, visible: false }; ficha.retrato = rid; }
+    const pvMax = +ficha.pvMax || 0;
+    u[`personajes/${id}`] = { ficha, estado: x.estado || { pv: pvMax, oro: 0, notas: '' }, dm: { secretos: x.secretos || '' } };
+    creados.push(ficha.nombre);
+  });
+  if (!creados.length) { aviso(saltados.length ? `Ya existían: ${saltados.join(', ')}` : 'No se encontró ningún personaje con nombre'); return; }
+  await sync.escribir(u);
+  avisarEspacio();
+  aviso(`Importados: ${creados.join(', ')}${saltados.length ? `. Ya existían: ${saltados.join(', ')}` : ''}${pinesNuevos.length ? '. Revisa sus PIN en cada tarjeta.' : ''}`);
+}
+function exportarFichas() {
+  const personajes = listaPj().map(([id, p]) => ({ ficha: p.ficha, estado: p.estado || {}, secretos: secretosDe(id), retratoSrc: srcDe(p.ficha.retrato) || undefined }));
+  const texto = JSON.stringify({ formato: FORMATO, version: 1, campana: (E.campana || {}).nombre || '', personajes }, null, 2);
+  try {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([texto], { type: 'application/json' }));
+    a.download = `personajes-${norm((E.campana || {}).nombre || 'campana').replace(/[^a-z0-9]+/g, '-')}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    aviso('Fichas exportadas');
+  } catch (e) { aviso('Este navegador no dejó descargar el archivo'); }
+}
+
+const CAMBIOS = {
+  'ent-cat'() { render(); },
+  async importar(t) { const f = t.files && t.files[0]; t.value = ''; if (f) await importarFichas(f); },
+};
 
 document.addEventListener('click', (ev) => {
   const b = ev.target.closest('[data-accion]');
