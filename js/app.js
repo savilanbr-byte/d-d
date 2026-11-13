@@ -853,6 +853,7 @@ function formEntrada() {
       <div><label class="etq" for="ent-dicho">Lo dijeron, puede ser falso (uno por línea)</label><textarea class="campo" id="ent-dicho" data-borrador style="min-height:70px">${val('ent-dicho')}</textarea></div>
       <div><label class="etq" for="ent-misterio">Por descubrir</label><input class="campo" style="width:100%" id="ent-misterio" data-borrador value="${val('ent-misterio')}"></div>
       <div><label class="etq" for="ent-img">Imagen</label><select class="campo" style="width:100%" id="ent-img" data-borrador>${opcionesImg(ui.borradores['ent-img'] || '')}</select></div>`}
+      <div class="lista-campo secreto" style="margin-top:0"><label class="etq" for="ent-notas">Notas del DM</label><p class="ayuda">Nunca las ven los jugadores, aunque reveles la entrada.</p><textarea class="campo" id="ent-notas" data-borrador style="min-height:70px">${val('ent-notas')}</textarea></div>
       <label class="check"><input type="checkbox" id="ent-oculto" data-borrador-check${ui.borradores['ent-oculto'] ? ' checked' : ''}> Sin revelar (solo la ve el DM)</label>
       <div class="fila"><button type="button" class="btn btn-oro" data-accion="ent-guardar">${ed ? 'Guardar cambios' : 'Añadir a la Historia'}</button>${ed || ui.borradores['ent-titulo'] ? '<button type="button" class="btn" data-accion="ent-cancelar">Cancelar</button>' : ''}</div>
     </div>
@@ -912,7 +913,7 @@ function dmBiblioteca() {
               <button type="button" class="btn btn-peq${x.oculto ? ' btn-oro' : ''}" data-accion="ent-revelar" data-cat="${cat}" data-id="${esc(id)}">${x.oculto ? 'Revelar' : 'Ocultar'}</button>
               <button type="button" class="btn btn-peq" data-accion="ent-editar" data-cat="${cat}" data-id="${esc(id)}">Editar</button>
               ${botonConfirmar(`borrar-ent-${cat}-${id}`, 'Borrar', 'ent-borrar', `data-cat="${cat}" data-id="${esc(id)}"`, 'btn btn-peq btn-peligro')}
-            </span></li>`).join('') || '<li class="tenue">Ninguna.</li>'}</ul>`).join('')}
+            </span>${x.notasDM ? `<details class="secretos ancho-li"><summary>Notas del DM</summary><p class="pre">${esc(x.notasDM)}</p></details>` : ''}</li>`).join('') || '<li class="tenue">Ninguna.</li>'}</ul>`).join('')}
       </section>
     </div>
   </div>`;
@@ -1375,7 +1376,7 @@ const ACCIONES = {
     Object.assign(ui.borradores, {
       'ent-cat': d.cat, 'ent-titulo': x.titulo || '', 'ent-sub': x.sub || '', 'ent-texto': x.texto || '', 'ent-tipo': x.tipo || 'hecho',
       'ent-visto': (x.visto || []).join('\n'), 'ent-dicho': (x.dicho || []).join('\n'), 'ent-misterio': x.misterio || '', 'ent-img': x.img || '',
-      'ent-oculto': !!x.oculto, 'ent-resuelto': !!x.resuelto,
+      'ent-oculto': !!x.oculto, 'ent-resuelto': !!x.resuelto, 'ent-notas': x.notasDM || '',
     });
     render(); const f = $('#form-entrada'); if (f) f.scrollIntoView({ block: 'start' });
   },
@@ -1389,6 +1390,7 @@ const ACCIONES = {
     const entrada = cat === 'misterios'
       ? { titulo, resuelto: !!g('ent-resuelto'), oculto: !!g('ent-oculto') }
       : { titulo, sub: g('ent-sub'), texto: g('ent-texto'), visto: lineas(g('ent-visto')), dicho: lineas(g('ent-dicho')), misterio: g('ent-misterio'), img: g('ent-img'), oculto: !!g('ent-oculto'), ...(cat === 'mundo' ? { tipo: g('ent-tipo') || 'hecho' } : {}) };
+    entrada.notasDM = g('ent-notas');
     entrada.orden = previo ? (previo.orden || Date.now()) : Date.now();
     if (previo && previo.imgPendiente && !entrada.img && cat !== 'misterios') entrada.imgPendiente = previo.imgPendiente;
     const id = ui.editandoEnt ? ui.editandoEnt.id : nuevoId(cat.slice(0, 2));
@@ -1490,6 +1492,8 @@ async function importarHistoria(file) {
     const ent = cat === 'misterios'
       ? { titulo, resuelto: !!x.resuelto }
       : { titulo, sub: String(primero(x, 'sub', 'subtitulo', 'rol', 'estado', 'lugar', 'detalle')), texto: String(primero(x, 'texto', 'descripcion', 'description')), visto: comoLista(x.visto || x.vimos || []), dicho: comoLista(x.dicho || x.dijeron || []), misterio: String(primero(x, 'misterio', 'por_descubrir', 'porDescubrir')), ...(cat === 'mundo' ? { tipo: ['hecho', 'dicho', 'misterio'].includes(x.tipo) ? x.tipo : 'hecho' } : {}) };
+    const notas = String(primero(x, 'notasDM', 'notas_dm', 'notasDm', 'notas_del_dm')).trim();
+    if (notas) ent.notasDM = notas;
     if (cat !== 'misterios') { if (img) { ent.img = img; conImagen++; } else if (nombreImg) { ent.imgPendiente = nombreImg; pendientes++; } }
     const revelada = x.revelada === true || x.oculto === false;
     const existe = Object.entries(enc[cat] || {}).find(([, y]) => norm(y.titulo) === norm(titulo));
@@ -1518,6 +1522,7 @@ function exportarHistoria() {
     const e = { seccion: cat, titulo: x.titulo };
     if (cat === 'misterios') e.resuelto = !!x.resuelto;
     else Object.assign(e, { sub: x.sub || '', texto: x.texto || '', visto: x.visto || [], dicho: x.dicho || [], misterio: x.misterio || '', imagen: (imgs()[x.img] || {}).nombre || x.imgPendiente || '', ...(cat === 'mundo' ? { tipo: x.tipo || 'hecho' } : {}) });
+    if (x.notasDM) e.notasDM = x.notasDM;
     e.revelada = !x.oculto;
     entradas.push(e);
   }

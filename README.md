@@ -61,6 +61,7 @@ En **DM → Biblioteca → Importar entradas** se carga un `.json` con muchas en
 
 - `seccion`: `mundo`, `pnj`, `lugares`, `objetos`, `inscripciones` o `misterios`.
 - `titulo` es obligatorio; lo demás es opcional: `sub`, `texto`, `visto` y `dicho` (listas), `misterio`, `tipo` (solo en mundo: `hecho`, `dicho` o `misterio`), `resuelto` (solo en misterios).
+- `notasDM`: notas privadas del DM (spoilers, estadísticas, ideas). Solo se ven en DM → Biblioteca, nunca en la Historia de los jugadores, aunque la entrada esté revelada.
 - `imagen`: el nombre de una imagen de la Biblioteca. Si todavía no existe, la entrada la espera y se le asigna sola cuando subas una imagen con ese nombre.
 
 ```json
