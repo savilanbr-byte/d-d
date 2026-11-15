@@ -21,7 +21,7 @@ Dirección de la app: https://savilanbr-byte.github.io/d-d/
 | **Reglas** | Las reglas de jugador del SRD 5.2.1 en español (cómo jugar, creación de personajes, clases, orígenes, dotes, equipo, conjuros y glosario), con índice y buscador. |
 | **DM → Mesa** | Combate (preparar iniciativa, tirar d20 para enemigos, siguiente turno, rondas), ambiente, relojes, enemigos y aliados en escena, pistas del grupo, mapa y fichas, escena y descansos. |
 | **DM → Personajes** | Crear, editar y borrar fichas, ver cualquier ficha, mandar pistas privadas, anotar secretos del DM (no los ve el jugador) e importar o exportar fichas en un archivo `.json`. |
-| **DM → Biblioteca** | Subir imágenes (llegan sin revelar), revelarlas en la Galería o mostrarlas en la mesa (eso también las revela), llenar la Historia una por una o importando un archivo, y revelar cada entrada cuando el grupo la descubra. |
+| **DM → Biblioteca** | Subir imágenes (llegan sin revelar), revelarlas en la Galería o mostrarlas en la mesa (eso también las revela), llenar la Historia una por una o importando un archivo, organizarla en grupos plegables (y ordenar sus entradas con ↑ ↓), y revelar cada entrada cuando el grupo la descubra. |
 | **DM → Reglas** | Las reglas del DM del SRD 5.2.1 (herramientas del juego, objetos mágicos, monstruos y animales). Su buscador encuentra también las reglas de jugador. |
 | **DM → Ajustes** | Nombre de la campaña, PIN del DM, PINs de los personajes y borrar la campaña. |
 
@@ -63,6 +63,7 @@ En **DM → Biblioteca → Importar entradas** se carga un `.json` con muchas en
 
 - `seccion`: `mundo`, `pnj`, `lugares`, `objetos`, `inscripciones` o `misterios`.
 - `titulo` es obligatorio; lo demás es opcional: `sub`, `texto`, `visto` y `dicho` (listas), `misterio`, `tipo` (solo en mundo: `hecho`, `dicho` o `misterio`), `resuelto` (solo en misterios).
+- `grupo`: nombre del grupo (arco, capítulo, región…). Si no existe, se crea. Los grupos se ven plegables en la Biblioteca y en la Historia de los jugadores.
 - `notasDM`: notas privadas del DM (spoilers, estadísticas, ideas). Solo se ven en DM → Biblioteca, nunca en la Historia de los jugadores, aunque la entrada esté revelada.
 - `imagen`: el nombre de una imagen de la Biblioteca. Si todavía no existe, la entrada la espera y se le asigna sola cuando subas una imagen con ese nombre.
 

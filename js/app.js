@@ -1,6 +1,6 @@
-import { ATRIBUTOS, NOMBRE_ATRIBUTO, COLORES, CATEGORIAS, TIPOS_PRESENCIA, MOMENTOS, LUCES, CLIMAS, TEMPERATURAS, fichaVacia } from './datos.js?v=20261115b';
-import { crearSync, claveSegura } from './sync.js?v=20261115b';
-import { vista as vistaReglasSRD } from './reglas.js?v=20261115b';
+import { ATRIBUTOS, NOMBRE_ATRIBUTO, COLORES, CATEGORIAS, TIPOS_PRESENCIA, MOMENTOS, LUCES, CLIMAS, TEMPERATURAS, fichaVacia } from './datos.js?v=20261115c';
+import { crearSync, claveSegura } from './sync.js?v=20261115c';
+import { vista as vistaReglasSRD } from './reglas.js?v=20261115c';
 
 /* ================= UTILIDADES ================= */
 const $ = (s, r = document) => r.querySelector(s);
@@ -62,6 +62,11 @@ const srcDe = (id) => (id && imgs()[id] ? imgs()[id].src : '');
 const mapas = () => Object.entries(imgs()).filter(([, i]) => i.tipo === 'mapa');
 const retratos = () => Object.entries(imgs()).filter(([, i]) => i.tipo === 'retrato');
 const porOrden = (obj, campo = (x) => x.orden) => Object.entries(obj || {}).sort((a, b) => (campo(a[1]) || 0) - (campo(b[1]) || 0));
+// Grupos de la Historia (arcos, capítulos…): grupos/<id> = { nombre, orden }; cada entrada guarda grupo: <id>
+const listaGrupos = () => porOrden(E.grupos).filter(([, g]) => g && g.nombre);
+const grupoDe = (x) => (x && x.grupo && (E.grupos || {})[x.grupo] && E.grupos[x.grupo].nombre ? x.grupo : '');
+const plegados = new Set(JSON.parse(ls.get('mesa-plegados') || '[]'));
+const abiertoAttr = (clave) => (plegados.has(clave) ? '' : ' open');
 const listaPj = () => porOrden(E.personajes, (p) => (p.ficha || {}).orden).filter(([, p]) => p.ficha);
 const F = (id) => ((E.personajes || {})[id] || {}).ficha || {};
 const S = (id) => ((E.personajes || {})[id] || {}).estado || {};
@@ -627,16 +632,23 @@ function vistaHistoria() {
   const e = E.escena || {};
   const pistas = porOrden(E.pistas, (p) => p.ts || 0).map(([, p]) => p);
   const galeria = Object.entries(imgs()).filter(([, i]) => i.tipo !== 'mapa' && i.visible);
-  const mist = visibles('misterios');
-  const secciones = [
-    ['h-mundo', 'El mundo', visibles('mundo').length && `<div class="enciclopedia">${visibles('mundo').map(([, m]) => `<article class="entrada-mundo">${imgClic(m.img, 'banda')}<div class="fila-sep"><h3>${esc(m.titulo)}</h3>${m.tipo ? `<span class="tag ${m.tipo}">${TIPO[m.tipo] || ''}</span>` : ''}</div>${m.texto ? `<p>${esc(m.texto)}</p>` : ''}${listasVistoDicho(m, 'Novedades')}</article>`).join('')}</div>`],
-    ['h-pnj', 'Personajes no jugadores', visibles('pnj').length && `<div class="pnjs">${visibles('pnj').map(([, p]) => `<article class="pnj">${srcDe(p.img) ? imgClic(p.img) : '<div class="sin-retrato" aria-hidden="true">?</div>'}<div class="pnj-txt"><h3>${esc(p.titulo)}</h3>${p.sub ? `<div class="tenue" style="font-size:14px">${esc(p.sub)}</div>` : ''}${p.texto ? `<p>${esc(p.texto)}</p>` : ''}${listasVistoDicho(p)}</div></article>`).join('')}</div>`],
-    ['h-lugares', 'Lugares', visibles('lugares').length && `<div class="tarjetas">${visibles('lugares').map(([, l]) => `<article class="tarjeta">${imgClic(l.img)}<div class="tarjeta-txt"><div class="fila-sep"><h3>${esc(l.titulo)}</h3>${l.sub ? `<span class="chip">${esc(l.sub)}</span>` : ''}</div>${l.texto ? `<p>${esc(l.texto)}</p>` : ''}${listasVistoDicho(l, 'Novedades')}</div></article>`).join('')}</div>`],
-    ['h-objetos', 'Objetos', visibles('objetos').length && `<div class="objetos">${visibles('objetos').map(([, o]) => `<article class="objeto">${srcDe(o.img) ? imgClic(o.img) : ''}<div><h3>${esc(o.titulo)}</h3>${o.sub ? `<div class="tenue" style="font-size:14px">${esc(o.sub)}</div>` : ''}${o.texto ? `<p>${esc(o.texto)}</p>` : ''}${listasVistoDicho(o, 'Novedades')}</div></article>`).join('')}</div>`],
-    ['h-insc', 'Inscripciones', visibles('inscripciones').length && `<div class="inscripciones">${visibles('inscripciones').map(([, i]) => `<div class="inscripcion">${srcDe(i.img) ? imgClic(i.img, 'insc-img') : ''}<div class="insc-texto">${esc(i.titulo)}</div>${i.sub ? `<div class="tenue" style="font-size:14px">${esc(i.sub)}</div>` : ''}${i.texto ? `<div style="font-size:15px">${esc(i.texto)}</div>` : ''}</div>`).join('')}</div>`],
-    ['h-misterios', 'Misterios', mist.length && `<div class="pj-chips">${mist.filter(([, m]) => !m.resuelto).map(([, m]) => `<span class="chip conc">${esc(m.titulo)}</span>`).join('') || '<span class="tenue">Ninguno abierto.</span>'}</div>${mist.some(([, m]) => m.resuelto) ? `<p class="sub" style="margin-top:12px">Resueltos</p><div class="pj-chips">${mist.filter(([, m]) => m.resuelto).map(([, m]) => `<span class="chip resuelto">✓ ${esc(m.titulo)}</span>`).join('')}</div>` : ''}`],
+  const bloques = (vis) => [
+    ['h-mundo', 'El mundo', vis('mundo').length && `<div class="enciclopedia">${vis('mundo').map(([, m]) => `<article class="entrada-mundo">${imgClic(m.img, 'banda')}<div class="fila-sep"><h3>${esc(m.titulo)}</h3>${m.tipo ? `<span class="tag ${m.tipo}">${TIPO[m.tipo] || ''}</span>` : ''}</div>${m.texto ? `<p>${esc(m.texto)}</p>` : ''}${listasVistoDicho(m, 'Novedades')}</article>`).join('')}</div>`],
+    ['h-pnj', 'Personajes no jugadores', vis('pnj').length && `<div class="pnjs">${vis('pnj').map(([, p]) => `<article class="pnj">${srcDe(p.img) ? imgClic(p.img) : '<div class="sin-retrato" aria-hidden="true">?</div>'}<div class="pnj-txt"><h3>${esc(p.titulo)}</h3>${p.sub ? `<div class="tenue" style="font-size:14px">${esc(p.sub)}</div>` : ''}${p.texto ? `<p>${esc(p.texto)}</p>` : ''}${listasVistoDicho(p)}</div></article>`).join('')}</div>`],
+    ['h-lugares', 'Lugares', vis('lugares').length && `<div class="tarjetas">${vis('lugares').map(([, l]) => `<article class="tarjeta">${imgClic(l.img)}<div class="tarjeta-txt"><div class="fila-sep"><h3>${esc(l.titulo)}</h3>${l.sub ? `<span class="chip">${esc(l.sub)}</span>` : ''}</div>${l.texto ? `<p>${esc(l.texto)}</p>` : ''}${listasVistoDicho(l, 'Novedades')}</div></article>`).join('')}</div>`],
+    ['h-objetos', 'Objetos', vis('objetos').length && `<div class="objetos">${vis('objetos').map(([, o]) => `<article class="objeto">${srcDe(o.img) ? imgClic(o.img) : ''}<div><h3>${esc(o.titulo)}</h3>${o.sub ? `<div class="tenue" style="font-size:14px">${esc(o.sub)}</div>` : ''}${o.texto ? `<p>${esc(o.texto)}</p>` : ''}${listasVistoDicho(o, 'Novedades')}</div></article>`).join('')}</div>`],
+    ['h-insc', 'Inscripciones', vis('inscripciones').length && `<div class="inscripciones">${vis('inscripciones').map(([, i]) => `<div class="inscripcion">${srcDe(i.img) ? imgClic(i.img, 'insc-img') : ''}<div class="insc-texto">${esc(i.titulo)}</div>${i.sub ? `<div class="tenue" style="font-size:14px">${esc(i.sub)}</div>` : ''}${i.texto ? `<div style="font-size:15px">${esc(i.texto)}</div>` : ''}</div>`).join('')}</div>`],
+    ['h-misterios', 'Misterios', vis('misterios').length && `<div class="pj-chips">${vis('misterios').filter(([, m]) => !m.resuelto).map(([, m]) => `<span class="chip conc">${esc(m.titulo)}</span>`).join('') || '<span class="tenue">Ninguno abierto.</span>'}</div>${vis('misterios').some(([, m]) => m.resuelto) ? `<p class="sub" style="margin-top:12px">Resueltos</p><div class="pj-chips">${vis('misterios').filter(([, m]) => m.resuelto).map(([, m]) => `<span class="chip resuelto">✓ ${esc(m.titulo)}</span>`).join('')}</div>` : ''}`],
+  ].filter((x) => x[2]);
+  const grupos = listaGrupos();
+  const enGrupo = (gid) => (cat) => visibles(cat).filter(([, x]) => grupoDe(x) === gid);
+  const conGrupos = grupos.length && grupos.some(([gid]) => bloques(enGrupo(gid)).length);
+  const secciones = conGrupos
+    ? [...grupos, ['', { nombre: 'Otros' }]].map(([gid, g]) => [`hg-${gid || 'otros'}`, esc(g.nombre), bloques(enGrupo(gid)).map(([, t, h]) => `<p class="sub hg-sub">${t}</p>${h}`).join(''), `h:${gid || 'otros'}`]).filter((x) => x[2])
+    : bloques(visibles);
+  secciones.push(...[
     ['h-galeria', 'Galería', galeria.length && `<div class="galeria">${galeria.map(([, i]) => `<figure><img src="${i.src}" alt="${esc(i.nombre)}" data-accion="ver-imagen" data-src="${esc(i.src)}" loading="lazy"><figcaption>${esc(i.nombre)}</figcaption></figure>`).join('')}</div>`],
-  ].filter((s) => s[2]);
+  ].filter((x) => x[2]));
   return `${secciones.length ? `<nav class="indice" aria-label="Secciones de la historia">${[['h-escena', 'Dónde estamos'], ...secciones.map(([id, t]) => [id, t]), ['h-diario', esDM() ? 'Diarios' : 'Mi diario']].map(([id, t]) => `<button type="button" class="chip" data-accion="ir-seccion" data-id="${id}">${t}</button>`).join('')}</nav>` : ''}
   <div class="historia">
     <div class="columna">
@@ -646,7 +658,9 @@ function vistaHistoria() {
         ${e.alerta ? `<div class="alerta" style="margin-top:10px"><span class="alerta-icono" aria-hidden="true"></span><span>${esc(e.alerta)}</span></div>` : ''}
         ${e.texto ? `<p style="margin:10px 0 0">${esc(e.texto)}</p>` : ''}
       </section>
-      ${secciones.map(([id, t, html]) => `<section class="panel" id="${id}"><h2 class="panel-titulo">${t}</h2>${html}</section>`).join('')}
+      ${secciones.map(([id, t, html, plegable]) => (plegable
+        ? `<details class="panel plegable" id="${id}" data-plegar="${esc(plegable)}"${abiertoAttr(plegable)}><summary><h2 class="panel-titulo">${t}</h2></summary>${html}</details>`
+        : `<section class="panel" id="${id}"><h2 class="panel-titulo">${t}</h2>${html}</section>`)).join('')}
       ${secciones.length ? '' : '<div class="vacio">La historia está vacía. El DM la va llenando desde DM → Biblioteca.</div>'}
     </div>
     <div class="columna">
@@ -895,11 +909,49 @@ function formEntrada() {
       <div><label class="etq" for="ent-dicho">Lo dijeron, puede ser falso (uno por línea)</label><textarea class="campo" id="ent-dicho" data-borrador style="min-height:70px">${val('ent-dicho')}</textarea></div>
       <div><label class="etq" for="ent-misterio">Por descubrir</label><input class="campo" style="width:100%" id="ent-misterio" data-borrador value="${val('ent-misterio')}"></div>
       <div><label class="etq" for="ent-img">Imagen</label><select class="campo" style="width:100%" id="ent-img" data-borrador>${opcionesImg(ui.borradores['ent-img'] || '', () => true)}</select></div>`}
+      ${listaGrupos().length ? `<div><label class="etq" for="ent-grupo">Grupo</label><select class="campo" style="width:100%" id="ent-grupo" data-borrador>${opcionesGrupo(ui.borradores['ent-grupo'] || '')}</select></div>` : ''}
       <div class="lista-campo secreto" style="margin-top:0"><label class="etq" for="ent-notas">Notas del DM</label><p class="ayuda">Nunca las ven los jugadores, aunque reveles la entrada.</p><textarea class="campo" id="ent-notas" data-borrador style="min-height:70px">${val('ent-notas')}</textarea></div>
       <label class="check"><input type="checkbox" id="ent-oculto" data-borrador-check${ui.borradores['ent-oculto'] ? ' checked' : ''}> Sin revelar (solo la ve el DM)</label>
       <div class="fila"><button type="button" class="btn btn-oro" data-accion="ent-guardar">${ed ? 'Guardar cambios' : 'Añadir a la Historia'}</button>${ed || ui.borradores['ent-titulo'] ? '<button type="button" class="btn" data-accion="ent-cancelar">Cancelar</button>' : ''}</div>
     </div>
   </section>`;
+}
+
+const opcionesGrupo = (sel) => `<option value="">Sin grupo</option>${listaGrupos().map(([k, g]) => `<option value="${esc(k)}"${sel === k ? ' selected' : ''}>${esc(g.nombre)}</option>`).join('')}`;
+
+function filaEntrada(cat, id, x, lista, i) {
+  return `<li class="${x.oculto ? 'oculta' : ''}">
+    <span class="ent-nombre">${esc(x.titulo)}${x.oculto ? ' <span class="tenue">(sin revelar)</span>' : ''}${cat === 'misterios' && x.resuelto ? ' <span class="chip resuelto">Resuelto</span>' : ''}${!x.img && x.imgPendiente ? ` <span class="tenue" style="font-size:13px">· espera la imagen «${esc(x.imgPendiente)}»</span>` : ''}</span>
+    <span class="fila" style="flex:none">
+      <span class="flechas"><button type="button" class="btn btn-peq" data-accion="ent-mover" data-cat="${cat}" data-id="${esc(id)}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="Subir ${esc(x.titulo)}">↑</button><button type="button" class="btn btn-peq" data-accion="ent-mover" data-cat="${cat}" data-id="${esc(id)}" data-d="1" ${i === lista.length - 1 ? 'disabled' : ''} aria-label="Bajar ${esc(x.titulo)}">↓</button></span>
+      ${listaGrupos().length ? `<label class="sr" for="eg-${esc(id)}">Grupo de ${esc(x.titulo)}</label><select class="campo campo-peq" id="eg-${esc(id)}" data-cambio="ent-grupo" data-cat="${cat}" data-id="${esc(id)}">${opcionesGrupo(grupoDe(x))}</select>` : ''}
+      <button type="button" class="btn btn-peq${x.oculto ? ' btn-oro' : ''}" data-accion="ent-revelar" data-cat="${cat}" data-id="${esc(id)}">${x.oculto ? 'Revelar' : 'Ocultar'}</button>
+      <button type="button" class="btn btn-peq" data-accion="ent-editar" data-cat="${cat}" data-id="${esc(id)}">Editar</button>
+      ${botonConfirmar(`borrar-ent-${cat}-${id}`, 'Borrar', 'ent-borrar', `data-cat="${cat}" data-id="${esc(id)}"`, 'btn btn-peq btn-peligro')}
+    </span>${x.notasDM ? `<details class="secretos ancho-li"><summary>Notas del DM</summary><p class="pre">${esc(x.notasDM)}</p></details>` : ''}</li>`;
+}
+
+function htmlGruposBiblioteca(enc) {
+  const grupos = listaGrupos();
+  const todos = [...grupos, ['', { nombre: grupos.length ? 'Sin grupo' : '' }]];
+  return todos.map(([gid, g], gi) => {
+    const cats = Object.keys(CATEGORIAS).map((cat) => [cat, porOrden(enc[cat]).filter(([, x]) => grupoDe(x) === gid)]).filter(([, l]) => l.length);
+    const total = cats.reduce((n, [, l]) => n + l.length, 0);
+    const cuerpo = cats.map(([cat, l]) => `<p class="sub" style="margin-top:10px">${esc(CATEGORIAS[cat].nombre)}</p><ul class="lista entradas">${l.map(([id, x], i) => filaEntrada(cat, id, x, l, i)).join('')}</ul>`).join('') || '<p class="tenue" style="margin:8px 0 0;font-size:14px">Sin entradas. Asígnale entradas con el selector «Grupo» de cada una.</p>';
+    if (!grupos.length) return total ? cuerpo : '<p class="tenue" style="margin:10px 0 0">Todavía no hay entradas.</p>';
+    if (!gid && !total) return '';
+    const renombrando = ui.renombrarGrupo === gid && gid;
+    const cabeza = renombrando
+      ? `<span class="fila" style="flex:1"><label class="sr" for="grupo-nombre">Nuevo nombre</label><input class="campo" id="grupo-nombre" data-borrador data-enter="grupo-renombrar" data-id="${esc(gid)}" value="${val('grupo-nombre', g.nombre)}" style="flex:1;min-width:140px"><button type="button" class="btn btn-peq btn-oro" data-accion="grupo-renombrar" data-id="${esc(gid)}">Guardar</button><button type="button" class="btn btn-peq" data-accion="grupo-renombrar-no">Cancelar</button></span>`
+      : `<span class="grupo-nombre">${esc(g.nombre)} <span class="tenue">(${total})</span></span>
+        ${gid ? `<span class="fila" style="flex:none">
+          <button type="button" class="btn btn-peq" data-accion="grupo-mover" data-id="${esc(gid)}" data-d="-1" ${gi === 0 ? 'disabled' : ''} aria-label="Subir el grupo">↑</button><button type="button" class="btn btn-peq" data-accion="grupo-mover" data-id="${esc(gid)}" data-d="1" ${gi === grupos.length - 1 ? 'disabled' : ''} aria-label="Bajar el grupo">↓</button>
+          <button type="button" class="btn btn-peq" data-accion="grupo-renombrar-si" data-id="${esc(gid)}">Renombrar</button>
+          ${botonConfirmar(`borrar-grupo-${gid}`, 'Borrar', 'grupo-borrar', `data-id="${esc(gid)}"`, 'btn btn-peq btn-peligro')}
+        </span>` : ''}`;
+    const clave = `b:${gid || 'sin'}`;
+    return `<details class="grupo-bib" data-plegar="${clave}"${abiertoAttr(clave)}><summary>${cabeza}</summary>${cuerpo}</details>`;
+  }).join('');
 }
 
 function dmBiblioteca() {
@@ -947,15 +999,9 @@ function dmBiblioteca() {
           <label class="btn btn-peq" for="imp-historia">Importar entradas</label><input type="file" id="imp-historia" class="sr" accept=".json,application/json" data-cambio="importar-historia">
           ${Object.values(enc).some((x) => Object.keys(x || {}).length) ? '<button type="button" class="btn btn-peq" data-accion="exportar-historia">Exportar entradas</button>' : ''}
         </div>
-        <p class="tenue" style="font-size:14px;margin:0">Las entradas importadas llegan sin revelar. Revélalas cuando el grupo las descubra.</p>
-        ${Object.entries(CATEGORIAS).map(([cat, c]) => `<p class="sub" style="margin-top:10px">${esc(c.nombre)}</p>
-          <ul class="lista entradas">${porOrden(enc[cat]).map(([id, x]) => `<li class="${x.oculto ? 'oculta' : ''}">
-            <span>${esc(x.titulo)}${x.oculto ? ' <span class="tenue">(sin revelar)</span>' : ''}${cat === 'misterios' && x.resuelto ? ' <span class="chip resuelto">Resuelto</span>' : ''}${!x.img && x.imgPendiente ? ` <span class="tenue" style="font-size:13px">· espera la imagen «${esc(x.imgPendiente)}»</span>` : ''}</span>
-            <span class="fila" style="flex:none">
-              <button type="button" class="btn btn-peq${x.oculto ? ' btn-oro' : ''}" data-accion="ent-revelar" data-cat="${cat}" data-id="${esc(id)}">${x.oculto ? 'Revelar' : 'Ocultar'}</button>
-              <button type="button" class="btn btn-peq" data-accion="ent-editar" data-cat="${cat}" data-id="${esc(id)}">Editar</button>
-              ${botonConfirmar(`borrar-ent-${cat}-${id}`, 'Borrar', 'ent-borrar', `data-cat="${cat}" data-id="${esc(id)}"`, 'btn btn-peq btn-peligro')}
-            </span>${x.notasDM ? `<details class="secretos ancho-li"><summary>Notas del DM</summary><p class="pre">${esc(x.notasDM)}</p></details>` : ''}</li>`).join('') || '<li class="tenue">Ninguna.</li>'}</ul>`).join('')}
+        <p class="tenue" style="font-size:14px;margin:0">Las entradas importadas llegan sin revelar. Revélalas cuando el grupo las descubra. Usa los grupos (arcos, capítulos, regiones…) para ordenarlas: los jugadores ven la Historia agrupada igual.</p>
+        <div class="fila" style="margin-top:10px"><label class="sr" for="grupo-nuevo">Nombre del grupo nuevo</label><input class="campo" id="grupo-nuevo" data-borrador data-enter="grupo-crear" placeholder="Nuevo grupo, p. ej. Arco 1: Karath Inu" value="${val('grupo-nuevo')}" style="flex:1;min-width:180px"><button type="button" class="btn btn-peq" data-accion="grupo-crear">Crear grupo</button></div>
+        ${htmlGruposBiblioteca(enc)}
       </section>
     </div>
   </div>`;
@@ -1396,7 +1442,7 @@ const ACCIONES = {
     const texto = d.tipo === 'largo' ? 'Descanso largo: PV, espacios y rasgos recuperados.' : 'Descanso corto: rasgos de descanso corto recuperados.';
     ui.confirmar = null; sync.escribir(u); aviso(texto);
   },
-  'ir-seccion'(d) { const el = document.getElementById(d.id); if (el) el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); },
+  'ir-seccion'(d) { const el = document.getElementById(d.id); if (el && el.tagName === 'DETAILS' && !el.open) el.open = true; if (el) el.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); },
 
   /* DM: biblioteca */
   async subir() {
@@ -1438,11 +1484,11 @@ const ACCIONES = {
     Object.assign(ui.borradores, {
       'ent-cat': d.cat, 'ent-titulo': x.titulo || '', 'ent-sub': x.sub || '', 'ent-texto': x.texto || '', 'ent-tipo': x.tipo || 'hecho',
       'ent-visto': (x.visto || []).join('\n'), 'ent-dicho': (x.dicho || []).join('\n'), 'ent-misterio': x.misterio || '', 'ent-img': x.img || '',
-      'ent-oculto': !!x.oculto, 'ent-resuelto': !!x.resuelto, 'ent-notas': x.notasDM || '',
+      'ent-oculto': !!x.oculto, 'ent-resuelto': !!x.resuelto, 'ent-notas': x.notasDM || '', 'ent-grupo': grupoDe(x),
     });
     render(); const f = $('#form-entrada'); if (f) f.scrollIntoView({ block: 'start' });
   },
-  'ent-cancelar'() { limpiar('ent-', ['ent-cat']); ui.editandoEnt = null; render(); },
+  'ent-cancelar'() { limpiar('ent-', ['ent-cat', 'ent-grupo']); ui.editandoEnt = null; render(); },
   'ent-guardar'() {
     const cat = ui.editandoEnt ? ui.editandoEnt.cat : (ui.borradores['ent-cat'] || 'pnj');
     const g = (id) => { const el = $('#' + id); return el ? (el.type === 'checkbox' ? el.checked : el.value.trim()) : ''; };
@@ -1453,16 +1499,56 @@ const ACCIONES = {
       ? { titulo, resuelto: !!g('ent-resuelto'), oculto: !!g('ent-oculto') }
       : { titulo, sub: g('ent-sub'), texto: g('ent-texto'), visto: lineas(g('ent-visto')), dicho: lineas(g('ent-dicho')), misterio: g('ent-misterio'), img: g('ent-img'), oculto: !!g('ent-oculto'), ...(cat === 'mundo' ? { tipo: g('ent-tipo') || 'hecho' } : {}) };
     entrada.notasDM = g('ent-notas');
+    entrada.grupo = $('#ent-grupo') ? g('ent-grupo') : (previo ? grupoDe(previo) : '');
     entrada.orden = previo ? (previo.orden || Date.now()) : Date.now();
     if (previo && previo.imgPendiente && !entrada.img && cat !== 'misterios') entrada.imgPendiente = previo.imgPendiente;
     const id = ui.editandoEnt ? ui.editandoEnt.id : nuevoId(cat.slice(0, 2));
     sync.escribir({ [`enciclopedia/${cat}/${id}`]: entrada });
-    limpiar('ent-', ['ent-cat']); ui.editandoEnt = null;
+    limpiar('ent-', ['ent-cat', 'ent-grupo']); ui.editandoEnt = null;
     aviso(previo ? 'Entrada actualizada' : `Añadido a ${CATEGORIAS[cat].nombre}`);
   },
   'ent-revelar'(d) { const x = ((E.enciclopedia || {})[d.cat] || {})[d.id]; if (x) sync.escribir({ [`enciclopedia/${d.cat}/${d.id}/oculto`]: !x.oculto }); },
   'exportar-historia'() { exportarHistoria(); },
-  'ent-borrar'(d) { ui.confirmar = null; if (ui.editandoEnt && ui.editandoEnt.id === d.id) { limpiar('ent-', ['ent-cat']); ui.editandoEnt = null; } sync.escribir({ [`enciclopedia/${d.cat}/${d.id}`]: null }); aviso('Entrada borrada'); },
+  'ent-mover'(d) {
+    const enc = E.enciclopedia || {};
+    const x = (enc[d.cat] || {})[d.id]; if (!x) return;
+    const lista = porOrden(enc[d.cat]).filter(([, y]) => grupoDe(y) === grupoDe(x));
+    const i = lista.findIndex(([k]) => k === d.id); const j = i + Number(d.d);
+    if (i < 0 || j < 0 || j >= lista.length) return;
+    // renumera la lista con el cambio, así no hay órdenes repetidos
+    const [a] = lista.splice(i, 1); lista.splice(j, 0, a);
+    const base = Math.min(...lista.map(([, y]) => y.orden || 0)) || Date.now();
+    const u = {}; lista.forEach(([k], n) => { u[`enciclopedia/${d.cat}/${k}/orden`] = base + n; });
+    sync.escribir(u);
+  },
+  'grupo-crear'() {
+    const nombre = (ui.borradores['grupo-nuevo'] || '').trim();
+    if (!nombre) { aviso('Escribe el nombre del grupo'); const el = $('#grupo-nuevo'); if (el) el.focus(); return; }
+    if (listaGrupos().some(([, g]) => norm(g.nombre) === norm(nombre))) { aviso('Ya hay un grupo con ese nombre'); return; }
+    const orden = Math.max(0, ...listaGrupos().map(([, g]) => g.orden || 0)) + 1;
+    sync.escribir({ [`grupos/${nuevoId('gr')}`]: { nombre, orden } });
+    delete ui.borradores['grupo-nuevo']; aviso(`Grupo «${nombre}» creado`);
+  },
+  'grupo-mover'(d) {
+    const l = listaGrupos(); const i = l.findIndex(([k]) => k === d.id); const j = i + Number(d.d);
+    if (i < 0 || j < 0 || j >= l.length) return;
+    const [a] = l.splice(i, 1); l.splice(j, 0, a);
+    const u = {}; l.forEach(([k], n) => { u[`grupos/${k}/orden`] = n + 1; }); sync.escribir(u);
+  },
+  'grupo-renombrar-si'(d) { ui.renombrarGrupo = d.id; delete ui.borradores['grupo-nombre']; },
+  'grupo-renombrar-no'() { ui.renombrarGrupo = null; delete ui.borradores['grupo-nombre']; },
+  'grupo-renombrar'(d) {
+    const nombre = ((ui.borradores['grupo-nombre'] ?? (E.grupos[d.id] || {}).nombre) || '').trim();
+    if (!nombre) { aviso('Escribe el nombre del grupo'); return; }
+    sync.escribir({ [`grupos/${d.id}/nombre`]: nombre }); ui.renombrarGrupo = null; delete ui.borradores['grupo-nombre'];
+  },
+  'grupo-borrar'(d) {
+    ui.confirmar = null;
+    const u = { [`grupos/${d.id}`]: null };
+    for (const [cat, lista] of Object.entries(E.enciclopedia || {})) for (const [k, x] of Object.entries(lista || {})) if (x && x.grupo === d.id) u[`enciclopedia/${cat}/${k}/grupo`] = null;
+    sync.escribir(u); aviso('Grupo borrado; sus entradas quedaron sin grupo');
+  },
+  'ent-borrar'(d) { ui.confirmar = null; if (ui.editandoEnt && ui.editandoEnt.id === d.id) { limpiar('ent-', ['ent-cat', 'ent-grupo']); ui.editandoEnt = null; } sync.escribir({ [`enciclopedia/${d.cat}/${d.id}`]: null }); aviso('Entrada borrada'); },
 
   /* DM: ajustes */
   'aj-guardar'() {
@@ -1544,6 +1630,14 @@ async function importarHistoria(file) {
   if (!lista.length) { aviso('El archivo no trae entradas'); return; }
   const enc = E.enciclopedia || {};
   const u = {}; let nuevas = 0, actualizadas = 0, conImagen = 0, pendientes = 0; const malas = [];
+  // grupos por nombre: usa los que existen y crea los que falten
+  const gruposPorNombre = new Map(listaGrupos().map(([k, g]) => [norm(g.nombre), k]));
+  let ordenGrupo = Math.max(0, ...listaGrupos().map(([, g]) => g.orden || 0));
+  const grupoPorNombre = (n) => {
+    const nn = norm(n); if (!nn) return '';
+    if (!gruposPorNombre.has(nn)) { const k = nuevoId('gr'); gruposPorNombre.set(nn, k); u[`grupos/${k}`] = { nombre: String(n).trim(), orden: ++ordenGrupo }; }
+    return gruposPorNombre.get(nn);
+  };
   const imagenPorNombre = (n) => (Object.entries(imgs()).find(([, i]) => norm(i.nombre) === norm(n)) || [])[0] || '';
   lista.forEach((x, i) => {
     const cat = SECCIONES_ALIAS[norm(x.seccion || x.section || x.categoria || '')];
@@ -1556,6 +1650,8 @@ async function importarHistoria(file) {
       : { titulo, sub: String(primero(x, 'sub', 'subtitulo', 'rol', 'estado', 'lugar', 'detalle')), texto: String(primero(x, 'texto', 'descripcion', 'description')), visto: comoLista(x.visto || x.vimos || []), dicho: comoLista(x.dicho || x.dijeron || []), misterio: String(primero(x, 'misterio', 'por_descubrir', 'porDescubrir')), ...(cat === 'mundo' ? { tipo: ['hecho', 'dicho', 'misterio'].includes(x.tipo) ? x.tipo : 'hecho' } : {}) };
     const notas = String(primero(x, 'notasDM', 'notas_dm', 'notasDm', 'notas_del_dm')).trim();
     if (notas) ent.notasDM = notas;
+    const nombreGrupo = String(primero(x, 'grupo', 'arco', 'capitulo', 'campana')).trim();
+    if (nombreGrupo) ent.grupo = grupoPorNombre(nombreGrupo);
     if (cat !== 'misterios') { if (img) { ent.img = img; conImagen++; } else if (nombreImg) { ent.imgPendiente = nombreImg; pendientes++; } }
     const revelada = x.revelada === true || x.oculto === false;
     const existe = Object.entries(enc[cat] || {}).find(([, y]) => norm(y.titulo) === norm(titulo));
@@ -1585,6 +1681,7 @@ function exportarHistoria() {
     if (cat === 'misterios') e.resuelto = !!x.resuelto;
     else Object.assign(e, { sub: x.sub || '', texto: x.texto || '', visto: x.visto || [], dicho: x.dicho || [], misterio: x.misterio || '', imagen: (imgs()[x.img] || {}).nombre || x.imgPendiente || '', ...(cat === 'mundo' ? { tipo: x.tipo || 'hecho' } : {}) });
     if (x.notasDM) e.notasDM = x.notasDM;
+    if (grupoDe(x)) e.grupo = E.grupos[x.grupo].nombre;
     e.revelada = !x.oculto;
     entradas.push(e);
   }
@@ -1600,6 +1697,7 @@ function exportarFichas() {
 const CAMBIOS = {
   'ent-cat'() { render(); },
   ini(t) { const v = parseInt(t.value, 10); sync.escribir({ [`combate/participantes/${t.dataset.pid}/ini`]: Number.isFinite(v) ? v : '' }); },
+  'ent-grupo'(t) { sync.escribir({ [`enciclopedia/${t.dataset.cat}/${t.dataset.id}/grupo`]: t.value || null }); },
   amb(t) { sync.escribir({ [`ambiente/${t.dataset.campo}`]: t.value }); },
   async importar(t) { const f = t.files && t.files[0]; t.value = ''; if (f) await importarFichas(f); },
   async 'importar-historia'(t) { const f = t.files && t.files[0]; t.value = ''; if (f) await importarHistoria(f); },
@@ -1631,6 +1729,12 @@ document.addEventListener('change', (ev) => {
   if (t.dataset && 'borradorCheck' in t.dataset && t.id) ui.borradores[t.id] = t.checked;
   if (t.dataset && t.dataset.cambio && CAMBIOS[t.dataset.cambio]) CAMBIOS[t.dataset.cambio](t);
 });
+document.addEventListener('toggle', (ev) => {
+  const t = ev.target;
+  if (!t || !t.dataset || !t.dataset.plegar) return;
+  if (t.open) plegados.delete(t.dataset.plegar); else plegados.add(t.dataset.plegar);
+  ls.set('mesa-plegados', JSON.stringify([...plegados]));
+}, true);
 function guardarNotas(id, valor) { escribirEstado(id, 'notas', valor); }
 document.addEventListener('focusout', (ev) => {
   const t = ev.target;

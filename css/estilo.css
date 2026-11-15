@@ -586,3 +586,24 @@ body.tv .revelado-texto { font-size: 20px; }
 .mesa-grupo .barra-pv { height: 5px; margin-top: 4px; }
 .mesa-grupo .pj-chips { margin-top: 4px; }
 .mesa-grupo .chip { font-size: 12px; padding: 0 7px; }
+
+/* ---------- grupos de la Historia ---------- */
+details.plegable > summary, details.grupo-bib > summary { list-style: none; cursor: pointer; }
+details.plegable > summary::-webkit-details-marker, details.grupo-bib > summary::-webkit-details-marker { display: none; }
+details.plegable > summary .panel-titulo { margin: 0; }
+details.plegable > summary .panel-titulo::before { content: "▸"; font-size: 13px; transition: transform .2s; display: inline-block; }
+details.plegable[open] > summary .panel-titulo { margin-bottom: 12px; }
+details.plegable[open] > summary .panel-titulo::before { transform: rotate(90deg); }
+.hg-sub { margin: 14px 0 8px; }
+.hg-sub:first-of-type { margin-top: 0; }
+details.grupo-bib { border: 1px solid var(--linea-suave); border-radius: 9px; margin-top: 10px; padding: 0 10px 8px; background: rgba(0, 0, 0, .14); }
+details.grupo-bib > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 9px 0 7px; }
+details.grupo-bib > summary::before { content: "▸"; color: var(--oro); transition: transform .2s; }
+details.grupo-bib[open] > summary::before { transform: rotate(90deg); }
+details.grupo-bib:not([open]) { padding-bottom: 0; }
+.grupo-nombre { flex: 1; font-family: var(--f-titulo); color: var(--oro-claro); font-weight: 600; letter-spacing: .03em; }
+.flechas { display: inline-flex; gap: 2px; }
+.flechas .btn, details.grupo-bib summary .btn[data-accion="grupo-mover"] { min-width: 30px; padding-left: 6px; padding-right: 6px; }
+.btn[disabled] { opacity: .35; cursor: default; }
+.campo.campo-peq { padding: 4px 6px; font-size: 14px; height: auto; max-width: 150px; }
+.entradas .ent-nombre { flex: 1 1 160px; min-width: 0; }

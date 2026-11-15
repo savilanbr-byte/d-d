@@ -60,6 +60,7 @@ export const ESTADO_VACIO = {
   actualizado: 0,
   campana: { nombre: 'Mi campaña', capitulo: '', pinDM: '' },
   escena: { lugar: '', alerta: '', texto: '', mapa: '', ilustracion: '' },
+  grupos: {},
   ambiente: { dia: 1, momento: 'manana', luz: 'brillante', clima: 'despejado', temperatura: 'templado', sensacion: '' },
   combate: { activo: false, ronda: 0, turno: '', participantes: {} },
   relojes: {},
