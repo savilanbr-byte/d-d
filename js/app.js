@@ -1,6 +1,6 @@
-import { ATRIBUTOS, NOMBRE_ATRIBUTO, COLORES, CATEGORIAS, TIPOS_PRESENCIA, MOMENTOS, LUCES, CLIMAS, TEMPERATURAS, fichaVacia } from './datos.js?v=20261115';
-import { crearSync, claveSegura } from './sync.js?v=20261115';
-import { vista as vistaReglasSRD } from './reglas.js?v=20261115';
+import { ATRIBUTOS, NOMBRE_ATRIBUTO, COLORES, CATEGORIAS, TIPOS_PRESENCIA, MOMENTOS, LUCES, CLIMAS, TEMPERATURAS, fichaVacia } from './datos.js?v=20261115b';
+import { crearSync, claveSegura } from './sync.js?v=20261115b';
+import { vista as vistaReglasSRD } from './reglas.js?v=20261115b';
 
 /* ================= UTILIDADES ================= */
 const $ = (s, r = document) => r.querySelector(s);
@@ -141,11 +141,12 @@ function entradaDeImagen(imgId) {
 
 // Texto de la entrada cuya imagen está en la mesa (nunca las notas del DM)
 function htmlRevelado() {
-  const ilu = (E.escena || {}).ilustracion;
+  const ilu0 = (E.escena || {}).ilustracion;
+  const ilu = ilu0 && imgs()[ilu0] ? ilu0 : mapaActual(); // la ilustración en pantalla, o si no, el mapa
   if (!ilu || !imgs()[ilu]) return '';
   const h = entradaDeImagen(ilu);
   if (!h || h[2].oculto) {
-    if (ui.tv || !esDM()) return '';
+    if (ui.tv || !esDM() || (!h && ilu !== ilu0)) return ''; // un mapa sin entrada no necesita aviso
     return `<section class="panel revelado-vacio"><p class="tenue" style="margin:0;font-size:15px">${h ? `La entrada <b>${esc(h[2].titulo)}</b> está sin revelar: revélala en DM → Biblioteca para que su texto salga aquí.` : `La imagen <b>${esc(imgs()[ilu].nombre)}</b> no tiene una entrada en la Historia. Crea una o edita una existente y elige esta imagen para que su texto salga aquí.`} <span style="font-size:13px">(Solo lo ves tú como DM.)</span></p></section>`;
   }
   const x = h[2];
@@ -893,7 +894,7 @@ function formEntrada() {
       <div><label class="etq" for="ent-visto">Lo vimos (uno por línea)</label><textarea class="campo" id="ent-visto" data-borrador style="min-height:70px">${val('ent-visto')}</textarea></div>
       <div><label class="etq" for="ent-dicho">Lo dijeron, puede ser falso (uno por línea)</label><textarea class="campo" id="ent-dicho" data-borrador style="min-height:70px">${val('ent-dicho')}</textarea></div>
       <div><label class="etq" for="ent-misterio">Por descubrir</label><input class="campo" style="width:100%" id="ent-misterio" data-borrador value="${val('ent-misterio')}"></div>
-      <div><label class="etq" for="ent-img">Imagen</label><select class="campo" style="width:100%" id="ent-img" data-borrador>${opcionesImg(ui.borradores['ent-img'] || '')}</select></div>`}
+      <div><label class="etq" for="ent-img">Imagen</label><select class="campo" style="width:100%" id="ent-img" data-borrador>${opcionesImg(ui.borradores['ent-img'] || '', () => true)}</select></div>`}
       <div class="lista-campo secreto" style="margin-top:0"><label class="etq" for="ent-notas">Notas del DM</label><p class="ayuda">Nunca las ven los jugadores, aunque reveles la entrada.</p><textarea class="campo" id="ent-notas" data-borrador style="min-height:70px">${val('ent-notas')}</textarea></div>
       <label class="check"><input type="checkbox" id="ent-oculto" data-borrador-check${ui.borradores['ent-oculto'] ? ' checked' : ''}> Sin revelar (solo la ve el DM)</label>
       <div class="fila"><button type="button" class="btn btn-oro" data-accion="ent-guardar">${ed ? 'Guardar cambios' : 'Añadir a la Historia'}</button>${ed || ui.borradores['ent-titulo'] ? '<button type="button" class="btn" data-accion="ent-cancelar">Cancelar</button>' : ''}</div>
@@ -1367,7 +1368,13 @@ const ACCIONES = {
     for (const m of Object.keys(E.fichas || {})) if ((E.fichas[m] || {})[d.k]) u[`fichas/${m}/${d.k}`] = null;
     sync.escribir(u);
   },
-  mapa(d) { sync.escribir({ 'escena/mapa': d.k, 'escena/ilustracion': '' }); aviso('La mesa muestra el mapa'); },
+  mapa(d) {
+    const u = { 'escena/mapa': d.k, 'escena/ilustracion': '' };
+    const ent = entradaDeImagen(d.k);
+    if (ent && ent[2].oculto) u[`enciclopedia/${ent[0]}/${ent[1]}/oculto`] = false; // su texto sale en la mesa, así que también queda revelado
+    sync.escribir(u);
+    aviso(ent ? `La mesa muestra el mapa con el texto de «${ent[2].titulo}»` : 'La mesa muestra el mapa');
+  },
   mostrar(d) {
     const u = { 'escena/ilustracion': d.id || '' };
     if (d.id && imgs()[d.id] && !imgs()[d.id].visible) u[`imagenes/${d.id}/visible`] = true; // lo que se muestra en la mesa ya quedó revelado
@@ -1537,7 +1544,7 @@ async function importarHistoria(file) {
   if (!lista.length) { aviso('El archivo no trae entradas'); return; }
   const enc = E.enciclopedia || {};
   const u = {}; let nuevas = 0, actualizadas = 0, conImagen = 0, pendientes = 0; const malas = [];
-  const imagenPorNombre = (n) => (Object.entries(imgs()).find(([, i]) => i.tipo !== 'mapa' && norm(i.nombre) === norm(n)) || [])[0] || '';
+  const imagenPorNombre = (n) => (Object.entries(imgs()).find(([, i]) => norm(i.nombre) === norm(n)) || [])[0] || '';
   lista.forEach((x, i) => {
     const cat = SECCIONES_ALIAS[norm(x.seccion || x.section || x.categoria || '')];
     const titulo = String(primero(x, 'titulo', 'nombre', 'title', 'texto_inscripcion')).trim();
