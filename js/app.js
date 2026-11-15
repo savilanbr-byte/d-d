@@ -1,6 +1,6 @@
-import { ATRIBUTOS, NOMBRE_ATRIBUTO, COLORES, CATEGORIAS, TIPOS_PRESENCIA, MOMENTOS, LUCES, CLIMAS, TEMPERATURAS, fichaVacia } from './datos.js?v=20261115c';
-import { crearSync, claveSegura } from './sync.js?v=20261115c';
-import { vista as vistaReglasSRD } from './reglas.js?v=20261115c';
+import { ATRIBUTOS, NOMBRE_ATRIBUTO, COLORES, CATEGORIAS, TIPOS_PRESENCIA, MOMENTOS, LUCES, CLIMAS, TEMPERATURAS, fichaVacia } from './datos.js?v=20261115d';
+import { crearSync, claveSegura } from './sync.js?v=20261115d';
+import { vista as vistaReglasSRD } from './reglas.js?v=20261115d';
 
 /* ================= UTILIDADES ================= */
 const $ = (s, r = document) => r.querySelector(s);
@@ -909,7 +909,8 @@ function formEntrada() {
       <div><label class="etq" for="ent-dicho">Lo dijeron, puede ser falso (uno por línea)</label><textarea class="campo" id="ent-dicho" data-borrador style="min-height:70px">${val('ent-dicho')}</textarea></div>
       <div><label class="etq" for="ent-misterio">Por descubrir</label><input class="campo" style="width:100%" id="ent-misterio" data-borrador value="${val('ent-misterio')}"></div>
       <div><label class="etq" for="ent-img">Imagen</label><select class="campo" style="width:100%" id="ent-img" data-borrador>${opcionesImg(ui.borradores['ent-img'] || '', () => true)}</select></div>`}
-      ${listaGrupos().length ? `<div><label class="etq" for="ent-grupo">Grupo</label><select class="campo" style="width:100%" id="ent-grupo" data-borrador>${opcionesGrupo(ui.borradores['ent-grupo'] || '')}</select></div>` : ''}
+      <div><label class="etq" for="ent-grupo">Grupo o campaña</label><select class="campo" style="width:100%" id="ent-grupo" data-borrador data-cambio="ent-grupo-form">${opcionesGrupo(ui.borradores['ent-grupo'] || '')}<option value="__nuevo"${ui.borradores['ent-grupo'] === '__nuevo' ? ' selected' : ''}>＋ Crear un grupo nuevo…</option></select>
+        ${ui.borradores['ent-grupo'] === '__nuevo' ? `<label class="sr" for="ent-grupo-nuevo">Nombre del grupo nuevo</label><input class="campo" style="width:100%;margin-top:6px" id="ent-grupo-nuevo" data-borrador placeholder="Nombre del grupo, p. ej. Arco 1: Karath Inu" value="${val('ent-grupo-nuevo')}">` : ''}</div>
       <div class="lista-campo secreto" style="margin-top:0"><label class="etq" for="ent-notas">Notas del DM</label><p class="ayuda">Nunca las ven los jugadores, aunque reveles la entrada.</p><textarea class="campo" id="ent-notas" data-borrador style="min-height:70px">${val('ent-notas')}</textarea></div>
       <label class="check"><input type="checkbox" id="ent-oculto" data-borrador-check${ui.borradores['ent-oculto'] ? ' checked' : ''}> Sin revelar (solo la ve el DM)</label>
       <div class="fila"><button type="button" class="btn btn-oro" data-accion="ent-guardar">${ed ? 'Guardar cambios' : 'Añadir a la Historia'}</button>${ed || ui.borradores['ent-titulo'] ? '<button type="button" class="btn" data-accion="ent-cancelar">Cancelar</button>' : ''}</div>
@@ -1499,12 +1500,21 @@ const ACCIONES = {
       ? { titulo, resuelto: !!g('ent-resuelto'), oculto: !!g('ent-oculto') }
       : { titulo, sub: g('ent-sub'), texto: g('ent-texto'), visto: lineas(g('ent-visto')), dicho: lineas(g('ent-dicho')), misterio: g('ent-misterio'), img: g('ent-img'), oculto: !!g('ent-oculto'), ...(cat === 'mundo' ? { tipo: g('ent-tipo') || 'hecho' } : {}) };
     entrada.notasDM = g('ent-notas');
+    let grupoNuevo = null;
     entrada.grupo = $('#ent-grupo') ? g('ent-grupo') : (previo ? grupoDe(previo) : '');
+    if (entrada.grupo === '__nuevo') {
+      const nombreG = g('ent-grupo-nuevo');
+      if (!nombreG) { aviso('Escribe el nombre del grupo nuevo'); $('#ent-grupo-nuevo').focus(); return; }
+      const existe = listaGrupos().find(([, x]) => norm(x.nombre) === norm(nombreG));
+      if (existe) entrada.grupo = existe[0];
+      else { entrada.grupo = nuevoId('gr'); grupoNuevo = { nombre: nombreG, orden: Math.max(0, ...listaGrupos().map(([, x]) => x.orden || 0)) + 1 }; }
+    }
     entrada.orden = previo ? (previo.orden || Date.now()) : Date.now();
     if (previo && previo.imgPendiente && !entrada.img && cat !== 'misterios') entrada.imgPendiente = previo.imgPendiente;
     const id = ui.editandoEnt ? ui.editandoEnt.id : nuevoId(cat.slice(0, 2));
-    sync.escribir({ [`enciclopedia/${cat}/${id}`]: entrada });
+    sync.escribir({ [`enciclopedia/${cat}/${id}`]: entrada, ...(grupoNuevo ? { [`grupos/${entrada.grupo}`]: grupoNuevo } : {}) });
     limpiar('ent-', ['ent-cat', 'ent-grupo']); ui.editandoEnt = null;
+    if (grupoNuevo) ui.borradores['ent-grupo'] = entrada.grupo;
     aviso(previo ? 'Entrada actualizada' : `Añadido a ${CATEGORIAS[cat].nombre}`);
   },
   'ent-revelar'(d) { const x = ((E.enciclopedia || {})[d.cat] || {})[d.id]; if (x) sync.escribir({ [`enciclopedia/${d.cat}/${d.id}/oculto`]: !x.oculto }); },
@@ -1697,6 +1707,7 @@ function exportarFichas() {
 const CAMBIOS = {
   'ent-cat'() { render(); },
   ini(t) { const v = parseInt(t.value, 10); sync.escribir({ [`combate/participantes/${t.dataset.pid}/ini`]: Number.isFinite(v) ? v : '' }); },
+  'ent-grupo-form'(t) { ui.borradores['ent-grupo'] = t.value; render(); if (t.value === '__nuevo') { const el = $('#ent-grupo-nuevo'); if (el) el.focus(); } },
   'ent-grupo'(t) { sync.escribir({ [`enciclopedia/${t.dataset.cat}/${t.dataset.id}/grupo`]: t.value || null }); },
   amb(t) { sync.escribir({ [`ambiente/${t.dataset.campo}`]: t.value }); },
   async importar(t) { const f = t.files && t.files[0]; t.value = ''; if (f) await importarFichas(f); },
