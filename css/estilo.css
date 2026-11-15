@@ -574,3 +574,15 @@ label.btn { cursor: pointer; }
 .revelado .tag.dicho { background: rgba(160, 100, 20, .14); color: #7a4d0c; border-color: rgba(160, 100, 20, .45); }
 .revelado .tag.misterio { background: rgba(100, 70, 170, .12); color: #4d3590; border-color: rgba(100, 70, 170, .4); }
 body.tv .revelado-texto { font-size: 20px; }
+/* fichas compactas en la fila inferior de la mesa */
+.mesa .mesa-grupo { padding: 10px 12px; }
+.mesa .mesa-grupo .panel-titulo { margin-bottom: 8px; }
+.mesa .mesa-grupo .grupo { grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 8px; }
+.mesa-grupo .pj { grid-template-columns: 38px 1fr; gap: 9px; padding: 6px 9px; border-left-width: 3px; }
+.mesa-grupo .pj .pj-retrato, .mesa-grupo .pj .avatar-ini { width: 38px; height: 38px; font-size: 16px; }
+.mesa-grupo .pj-nombre { font-size: 14.5px; }
+.mesa-grupo .pv-num { font-size: 13px; }
+.mesa-grupo .pj-clase { font-size: 12px; }
+.mesa-grupo .barra-pv { height: 5px; margin-top: 4px; }
+.mesa-grupo .pj-chips { margin-top: 4px; }
+.mesa-grupo .chip { font-size: 12px; padding: 0 7px; }

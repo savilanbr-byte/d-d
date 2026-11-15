@@ -1,6 +1,6 @@
-import { ATRIBUTOS, NOMBRE_ATRIBUTO, COLORES, CATEGORIAS, TIPOS_PRESENCIA, MOMENTOS, LUCES, CLIMAS, TEMPERATURAS, fichaVacia } from './datos.js';
-import { crearSync, claveSegura } from './sync.js';
-import { vista as vistaReglasSRD } from './reglas.js';
+import { ATRIBUTOS, NOMBRE_ATRIBUTO, COLORES, CATEGORIAS, TIPOS_PRESENCIA, MOMENTOS, LUCES, CLIMAS, TEMPERATURAS, fichaVacia } from './datos.js?v=20261115';
+import { crearSync, claveSegura } from './sync.js?v=20261115';
+import { vista as vistaReglasSRD } from './reglas.js?v=20261115';
 
 /* ================= UTILIDADES ================= */
 const $ = (s, r = document) => r.querySelector(s);
@@ -128,6 +128,14 @@ function entradaDeImagen(imgId) {
     if (cat === 'misterios') continue;
     for (const [id, x] of porOrden(lista || {})) if (x && x.img === imgId) hallados.push([cat, id, x]);
   }
+  if (!hallados.length) {
+    // sin enlace directo: entrada que la espera por nombre o que se llama igual que la imagen
+    const nombre = norm((imgs()[imgId] || {}).nombre);
+    if (nombre) for (const [cat, lista] of Object.entries(E.enciclopedia || {})) {
+      if (cat === 'misterios') continue;
+      for (const [id, x] of porOrden(lista || {})) if (x && (norm(x.imgPendiente) === nombre || norm(x.titulo) === nombre)) hallados.push([cat, id, x]);
+    }
+  }
   return hallados.find(([, , x]) => !x.oculto) || hallados[0] || null;
 }
 
@@ -136,7 +144,10 @@ function htmlRevelado() {
   const ilu = (E.escena || {}).ilustracion;
   if (!ilu || !imgs()[ilu]) return '';
   const h = entradaDeImagen(ilu);
-  if (!h || h[2].oculto) return '';
+  if (!h || h[2].oculto) {
+    if (ui.tv || !esDM()) return '';
+    return `<section class="panel revelado-vacio"><p class="tenue" style="margin:0;font-size:15px">${h ? `La entrada <b>${esc(h[2].titulo)}</b> está sin revelar: revélala en DM → Biblioteca para que su texto salga aquí.` : `La imagen <b>${esc(imgs()[ilu].nombre)}</b> no tiene una entrada en la Historia. Crea una o edita una existente y elige esta imagen para que su texto salga aquí.`} <span style="font-size:13px">(Solo lo ves tú como DM.)</span></p></section>`;
+  }
   const x = h[2];
   return `<section class="pergamino revelado">
     <h2 class="panel-titulo">${esc(CATEGORIAS[h[0]] ? CATEGORIAS[h[0]].singular : 'En la mesa')}</h2>
