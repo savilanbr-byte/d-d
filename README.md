@@ -15,7 +15,7 @@ Dirección de la app: https://savilanbr-byte.github.io/d-d/
 
 | Sección | Para qué |
 |---|---|
-| **Mesa** | Lugar, alerta, mapa con fichas (o una ilustración), iniciativa con la ronda y a quién le toca, ambiente (día, momento, luz, clima, temperatura y sus reglas), relojes de amenaza, el grupo con PV y estados, y quién está en escena. |
+| **Mesa** | Lugar, alerta, mapa con fichas (o una ilustración), iniciativa con la ronda y a quién le toca, ambiente (día, momento, luz, clima, temperatura y sus reglas), relojes de amenaza, el texto de la entrada de Historia cuya imagen se muestra (a la derecha), quién está en escena, y el grupo con PV y estados a lo ancho abajo. |
 | **Mi personaje** | Ficha viva: PV, espacios de conjuro, concentración, recursos con usos, estados, ataques, conjuros, pistas privadas, notas, atributos, rasgos y equipo. Se edita con **Editar ficha**. |
 | **Historia** | Enciclopedia de la campaña (mundo, personajes no jugadores, lugares, objetos, inscripciones, misterios), galería con las imágenes que el DM ya reveló, pistas del grupo y el diario de cada jugador (lo ven solo él y el DM; el DM ve todos los diarios). |
 | **Reglas** | Las reglas de jugador del SRD 5.2.1 en español (cómo jugar, creación de personajes, clases, orígenes, dotes, equipo, conjuros y glosario), con índice y buscador. |

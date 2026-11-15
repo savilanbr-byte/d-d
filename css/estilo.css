@@ -562,3 +562,15 @@ label.btn { cursor: pointer; }
   .rg-titulo { font-size: 21px; }
   .barra-inf a { font-size: 11px; }
 }
+
+/* ---------- mesa: grupo abajo y texto de lo revelado a la derecha ---------- */
+.mesa-grupo { grid-column: 1 / -1; }
+.mesa .mesa-grupo .grupo { grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); }
+.revelado-titulo { font-family: var(--f-titulo); font-size: 22px; color: #4a3414; margin: 0 0 2px; }
+.revelado-sub { margin: 0 0 8px; font-size: 15px; color: var(--tinta-suave); font-style: italic; }
+.revelado-texto { margin: 0 0 10px; white-space: pre-line; line-height: 1.5; }
+.revelado .sub { margin: 10px 0 4px; }
+.revelado .tag.hecho { background: rgba(60, 120, 60, .14); color: #2f5e2f; border-color: rgba(60, 120, 60, .45); }
+.revelado .tag.dicho { background: rgba(160, 100, 20, .14); color: #7a4d0c; border-color: rgba(160, 100, 20, .45); }
+.revelado .tag.misterio { background: rgba(100, 70, 170, .12); color: #4d3590; border-color: rgba(100, 70, 170, .4); }
+body.tv .revelado-texto { font-size: 20px; }

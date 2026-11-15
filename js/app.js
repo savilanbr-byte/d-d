@@ -120,6 +120,33 @@ function htmlEscenaVisual() {
   return htmlMapa(false);
 }
 
+// Entrada de la Historia que usa una imagen (la primera revelada, si hay varias)
+function entradaDeImagen(imgId) {
+  if (!imgId) return null;
+  const hallados = [];
+  for (const [cat, lista] of Object.entries(E.enciclopedia || {})) {
+    if (cat === 'misterios') continue;
+    for (const [id, x] of porOrden(lista || {})) if (x && x.img === imgId) hallados.push([cat, id, x]);
+  }
+  return hallados.find(([, , x]) => !x.oculto) || hallados[0] || null;
+}
+
+// Texto de la entrada cuya imagen está en la mesa (nunca las notas del DM)
+function htmlRevelado() {
+  const ilu = (E.escena || {}).ilustracion;
+  if (!ilu || !imgs()[ilu]) return '';
+  const h = entradaDeImagen(ilu);
+  if (!h || h[2].oculto) return '';
+  const x = h[2];
+  return `<section class="pergamino revelado">
+    <h2 class="panel-titulo">${esc(CATEGORIAS[h[0]] ? CATEGORIAS[h[0]].singular : 'En la mesa')}</h2>
+    <h3 class="revelado-titulo">${esc(x.titulo)}</h3>
+    ${x.sub ? `<p class="revelado-sub">${esc(x.sub)}</p>` : ''}
+    ${x.texto ? `<p class="revelado-texto">${esc(x.texto)}</p>` : ''}
+    ${listasVistoDicho(x, h[0] === 'pnj' ? 'Lo vimos' : 'Novedades')}
+  </section>`;
+}
+
 function pjMini(id) {
   const f = F(id); const s = S(id); const pv = pvDe(id);
   const est = Object.keys(s.estados || {});
@@ -240,12 +267,13 @@ function vistaMesa() {
       ${htmlIniciativa()}
       ${htmlAmbiente()}
       ${htmlRelojes()}
-      <section class="panel">
-        <h2 class="panel-titulo">El grupo</h2>
-        ${pjs.length ? `<div class="grupo">${pjs.map(([id]) => pjMini(id)).join('')}</div>` : '<p class="tenue" style="margin:0">Todavía no hay personajes.</p>'}
-      </section>
+      ${htmlRevelado()}
       ${htmlPresencias()}
     </div>
+    <section class="panel mesa-grupo">
+      <h2 class="panel-titulo">El grupo</h2>
+      ${pjs.length ? `<div class="grupo">${pjs.map(([id]) => pjMini(id)).join('')}</div>` : '<p class="tenue" style="margin:0">Todavía no hay personajes.</p>'}
+    </section>
   </div>`;
 }
 
@@ -1332,7 +1360,10 @@ const ACCIONES = {
   mostrar(d) {
     const u = { 'escena/ilustracion': d.id || '' };
     if (d.id && imgs()[d.id] && !imgs()[d.id].visible) u[`imagenes/${d.id}/visible`] = true; // lo que se muestra en la mesa ya quedó revelado
-    sync.escribir(u); aviso(d.id ? 'Se muestra en la mesa y queda revelada en la Galería' : 'La mesa vuelve al mapa');
+    const ent = d.id ? entradaDeImagen(d.id) : null;
+    if (ent && ent[2].oculto) u[`enciclopedia/${ent[0]}/${ent[1]}/oculto`] = false; // su texto sale en la mesa, así que también queda revelado
+    sync.escribir(u);
+    aviso(!d.id ? 'La mesa vuelve al mapa' : ent ? `Se muestra en la mesa con el texto de «${ent[2].titulo}»` : 'Se muestra en la mesa y queda revelada en la Galería');
   },
   mover() { ui.moverFichas = !ui.moverFichas; render(); },
   'escena-guardar'() {
