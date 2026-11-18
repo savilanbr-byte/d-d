@@ -607,3 +607,51 @@ details.grupo-bib:not([open]) { padding-bottom: 0; }
 .btn[disabled] { opacity: .35; cursor: default; }
 .campo.campo-peq { padding: 4px 6px; font-size: 14px; height: auto; max-width: 150px; }
 .entradas .ent-nombre { flex: 1 1 160px; min-width: 0; }
+
+/* ---------- Banco de PNJ ---------- */
+.chip.salud { font-family: var(--f-etiqueta); font-weight: 700; letter-spacing: .03em; }
+.chip.salud.ileso { border-color: rgba(121, 194, 122, .6); color: #cdeccd; background: rgba(121, 194, 122, .12); }
+.chip.salud.herido { border-color: rgba(232, 172, 62, .6); color: #ffe0a8; background: rgba(232, 172, 62, .12); }
+.chip.salud.malherido { border-color: rgba(232, 128, 62, .7); color: #ffcfa8; background: rgba(232, 128, 62, .16); }
+.chip.salud.apunto { border-color: rgba(224, 86, 75, .8); color: #ffc9c3; background: rgba(224, 86, 75, .2); }
+.guardian.oculta, .pr-dm.oculta { border-style: dashed; opacity: .7; }
+.ficha-mapa.oculta { opacity: .45; border-style: dashed; }
+.pr-dm.turno { box-shadow: inset 3px 0 0 var(--oro); padding-left: 10px; }
+.pr-dm.oculta { border-top-style: dashed; }
+.atq-lista { display: grid; gap: 6px; margin-top: 10px; }
+.atq { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 10px; border-radius: 8px; background: var(--losa-2); }
+.atq-nombre { font-weight: 500; color: var(--oro-claro); }
+.pl-perfil { margin-top: 8px; }
+.pl-perfil > summary { cursor: pointer; color: var(--oro); font-size: 15px; }
+.perfil { padding: 8px 0 2px; }
+.perfil .sub { margin-top: 10px; }
+.perfil-desc { margin: 0 0 6px; font-style: italic; color: var(--tenue); }
+.perfil-atr { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin: 10px 0; text-align: center; }
+.perfil-atr > div { display: grid; padding: 6px 2px; border-radius: 8px; background: var(--losa-2); border: 1px solid var(--linea-suave); }
+.perfil-atr span { font-family: var(--f-etiqueta); font-size: 12px; color: var(--tenue); }
+.perfil-atr b { font-size: 18px; line-height: 1.2; }
+.perfil-atr small { font-size: 13px; color: var(--oro-claro); }
+.perfil-otros { margin: 6px 0 0; font-size: 15px; color: var(--tenue); }
+.pl-lista { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 10px; }
+.pl-item { padding: 10px 12px; border-radius: 9px; background: var(--losa-2); border: 1px solid var(--linea-suave); }
+.pl-cab { display: flex; gap: 10px; align-items: center; }
+.pl-avatar { width: 46px; height: 46px; border-radius: 8px; object-fit: cover; flex: none; border: 1px solid var(--linea); }
+.pl-avatar.avatar-ini { font-size: 17px; --c: #e0564b; }
+.pl-avatar.avatar-ini.neutral { --c: #9a9db0; }
+.pl-avatar.avatar-ini.aliado { --c: #79c27a; }
+.pl-nombre { font-family: var(--f-titulo); font-weight: 600; font-size: 15px; }
+.pl-desc { font-size: 14px; color: var(--tenue); }
+.pl-acc { margin-top: 10px; gap: 6px; }
+.campo-cant { width: 64px; flex: none; padding: 5px 8px; font-size: 15px; text-align: center; }
+.pl-opciones { display: grid; gap: 4px; margin: 10px 0 2px; font-size: 15px; }
+.seg.seg-peq { margin-bottom: 4px; }
+.seg.seg-peq button { padding: 6px 12px; font-size: 13px; }
+.seg button[aria-pressed="true"] { background: linear-gradient(180deg, #e2c272, #b88c35); color: #1c1408; font-weight: 700; }
+.tiradas { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+.tiradas li { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; padding: 7px 10px; border-radius: 8px; background: var(--losa-2); border-left: 3px solid var(--linea); }
+.tiradas li:first-child { border-left-color: var(--oro); }
+.tiradas li b { font-weight: 500; }
+.tiradas li small { display: block; font-size: 13px; color: var(--tenue); font-variant-numeric: tabular-nums; }
+.tiradas li.critico { border-left-color: var(--bien); background: rgba(121, 194, 122, .1); }
+.tiradas li.pifia { border-left-color: var(--peligro); background: rgba(224, 86, 75, .08); }
+@media (max-width: 520px) { .perfil-atr { grid-template-columns: repeat(3, minmax(0, 1fr)); } }

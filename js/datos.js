@@ -66,6 +66,7 @@ export const ESTADO_VACIO = {
   relojes: {},
   personajes: {},
   presencias: {},
+  banco: {},
   imagenes: {},
   enciclopedia: {},
   pistas: {},

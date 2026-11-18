@@ -19,7 +19,8 @@ Dirección de la app: https://savilanbr-byte.github.io/d-d/
 | **Mi personaje** | Ficha viva: PV, espacios de conjuro, concentración, recursos con usos, estados, ataques, conjuros, pistas privadas, notas, atributos, rasgos y equipo. Se edita con **Editar ficha**. |
 | **Historia** | Enciclopedia de la campaña (mundo, personajes no jugadores, lugares, objetos, inscripciones, misterios), galería con las imágenes que el DM ya reveló, pistas del grupo y el diario de cada jugador (lo ven solo él y el DM; el DM ve todos los diarios). |
 | **Reglas** | Las reglas de jugador del SRD 5.2.1 en español (cómo jugar, creación de personajes, clases, orígenes, dotes, equipo, conjuros y glosario), con índice y buscador. |
-| **DM → Mesa** | Combate (preparar iniciativa, tirar d20 para enemigos, siguiente turno, rondas), ambiente, relojes, enemigos y aliados en escena, pistas del grupo, mapa y fichas, escena y descansos. |
+| **DM → Mesa** | Combate (preparar iniciativa, tirar d20 para enemigos, siguiente turno, rondas), tiradas del DM (ataques con ventaja o desventaja, daño, críticos y tiradas libres; solo las ve el DM), enemigos y aliados en escena (desde el banco o a mano, con PV, daño y curación, ataques para tirar, perfil y opción de ocultarlos de la mesa), ambiente, relojes, pistas del grupo, mapa y fichas, escena y descansos. |
+| **DM → Banco PNJ** | Plantillas reutilizables de enemigos, aliados y personajes no jugadores (CA, PV, dados de golpe, iniciativa, atributos, ataques, rasgos, acciones y notas del DM), ordenadas por grupo y con buscador. «A escena» crea copias numeradas (Bandido 1, Bandido 2…) con sus propios PV y estados; pueden llegar ocultas, con PV tirados y, si hay combate, con su iniciativa ya tirada. La mesa y los celulares solo ven su salud aproximada: Ileso, Herido, Malherido o A punto de caer. Importar y exportar en `.json`. |
 | **DM → Personajes** | Crear, editar y borrar fichas, ver cualquier ficha, mandar pistas privadas, anotar secretos del DM (no los ve el jugador) e importar o exportar fichas en un archivo `.json`. |
 | **DM → Biblioteca** | Subir imágenes (llegan sin revelar), revelarlas en la Galería o mostrarlas en la mesa (eso también las revela), llenar la Historia una por una o importando un archivo, organizarla en grupos plegables (y ordenar sus entradas con ↑ ↓), y revelar cada entrada cuando el grupo la descubra. |
 | **DM → Reglas** | Las reglas del DM del SRD 5.2.1 (herramientas del juego, objetos mágicos, monstruos y animales). Su buscador encuentra también las reglas de jugador. |
@@ -81,6 +82,27 @@ En **DM → Biblioteca → Importar entradas** se carga un `.json` con muchas en
 
 **Exportar entradas** descarga ese mismo archivo con todo lo que hay en la Historia.
 
+## Importar el banco de PNJ
+
+En **DM → Banco PNJ → Importar** se carga un archivo `.json` con este formato. Solo el nombre es obligatorio. Si ya hay una plantilla con el mismo nombre, se actualiza. `ataques`, `rasgos` y `acciones` pueden ir como lista o como texto (una por línea, igual que en el formulario). `retrato` es el nombre de un retrato de la Biblioteca. **Exportar** descarga el mismo formato.
+
+```json
+{
+  "formato": "mesa-del-dm/banco",
+  "version": 1,
+  "plantillas": [
+    {
+      "nombre": "Bandido", "grupo": "Caminos", "tipo": "enemigo", "desc": "Humanoide mediano, neutral", "vd": "1/8",
+      "ca": 12, "caNota": "armadura de cuero", "pv": 11, "dadosPv": "2d8 + 2", "velocidad": "9 m", "ini": "+1",
+      "atributos": { "FUE": 11, "DES": 12, "CON": 12, "INT": 10, "SAB": 10, "CAR": 10 },
+      "otros": ["Idiomas: Común"],
+      "ataques": [{ "nombre": "Cimitarra", "bono": "+3", "dano": "1d6 + 1 cortante" }],
+      "rasgos": [], "acciones": [], "notas": "Huyen si cae el jefe", "retrato": ""
+    }
+  ]
+}
+```
+
 ## Archivos
 
 | Archivo | Qué tiene |
@@ -90,6 +112,7 @@ En **DM → Biblioteca → Importar entradas** se carga un `.json` con muchas en
 | `js/datos.js` | Listas fijas y la campaña vacía |
 | `js/sync.js` | Sincronización en vivo (Firebase) o de demostración |
 | `js/app.js` | Vistas, creador de personajes y panel del DM |
+| `js/dados.js` | Tiradas de dados y salud aproximada de los PNJ |
 | `js/reglas.js` | Lector de reglas: índice, buscador y dibujo de tablas y perfiles |
 | `reglas/reglas-jugador.json`, `reglas/reglas-dm.json` | El SRD 5.2.1 en español convertido a capítulos y secciones |
 | `css/estilo.css` | La estética |

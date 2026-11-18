@@ -1,6 +1,7 @@
-import { ATRIBUTOS, NOMBRE_ATRIBUTO, COLORES, CATEGORIAS, TIPOS_PRESENCIA, MOMENTOS, LUCES, CLIMAS, TEMPERATURAS, fichaVacia } from './datos.js?v=20261115d';
-import { crearSync, claveSegura } from './sync.js?v=20261115d';
-import { vista as vistaReglasSRD } from './reglas.js?v=20261115d';
+import { ATRIBUTOS, NOMBRE_ATRIBUTO, COLORES, CATEGORIAS, TIPOS_PRESENCIA, MOMENTOS, LUCES, CLIMAS, TEMPERATURAS, fichaVacia } from './datos.js?v=20261117a';
+import { crearSync, claveSegura } from './sync.js?v=20261117a';
+import { vista as vistaReglasSRD } from './reglas.js?v=20261117a';
+import { tirarExpr, tirarD20, bonoNum, modDe, promedio, saludAprox } from './dados.js?v=20261117a';
 
 /* ================= UTILIDADES ================= */
 const $ = (s, r = document) => r.querySelector(s);
@@ -39,6 +40,10 @@ const ui = {
   ultimoTurno: 'inicio',
   ocupado: false,
   reglas: { jugador: { q: '', sec: null, qPrevia: '' }, dm: { q: '', sec: null, qPrevia: '' } },
+  editandoPl: null, // id de la plantilla del banco en edición, o 'nuevo'
+  tiradas: [], // últimas tiradas del DM (solo en este dispositivo)
+  modoTirada: 'normal',
+  abiertos: new Set(), // perfiles desplegados (para que no se cierren al llegar cambios)
 };
 ui.ver = ui.yo;
 let sync;
@@ -82,6 +87,13 @@ const esDM = () => abierto('dm');
 const puedeVer = (id) => abierto(id) || esDM();
 const nivelPv = (pv, max) => (!max ? '' : pv / max <= 0.25 ? 'baja' : pv / max <= 0.5 ? 'media' : '');
 const pct = (a, b) => (b ? Math.max(0, Math.min(100, (a / b) * 100)) : 0);
+// Banco de PNJ: banco/<id> = plantilla. Las presencias creadas desde el banco guardan
+// plantilla (id), pvMax, ca, ini y ataques propios; su PV es pvMax − dano.
+const listaBanco = () => porOrden(E.banco).filter(([, t]) => t && t.nombre);
+const plantillaDe = (p) => (p && p.plantilla && (E.banco || {})[p.plantilla]) || null;
+const pvPr = (p) => Math.max(0, (+p.pvMax || 0) - (+p.dano || 0));
+const verOcultos = () => esDM() && !ui.tv; // el DM ve lo oculto en su pantalla, nunca en el modo TV
+const presenciasVisibles = () => porOrden(E.presencias).filter(([, p]) => !p.oculto || verOcultos());
 function guardarDesbloqueos() { ls.set('mesa-desbloqueos', JSON.stringify(ui.desbloqueos)); }
 
 function avatar(id, clase = 'pj-retrato') {
@@ -110,11 +122,11 @@ function htmlMapa(editable) {
     const f = F(id); const src = srcDe(f.retrato);
     fichas.push(`<div class="ficha-mapa" data-ficha="${esc(id)}" style="left:${p.x}%;top:${p.y}%;--c:${f.color}${src ? `;background-image:url(${src})` : ''}" role="img" aria-label="${esc(f.nombre)}">${src ? '' : esc((f.nombre || '?')[0].toUpperCase())}<span class="etq">${esc(f.nombre)}</span></div>`);
   });
-  porOrden(E.presencias).forEach(([k, pr], i) => {
+  presenciasVisibles().forEach(([k, pr], i) => {
     const p = pos[k] || { x: 92, y: 10 + i * 9 };
     const src = srcDe(pr.img);
     const letra = esc((pr.nombre || '?').slice(0, 2).replace(/^./, (c) => c.toUpperCase()));
-    fichas.push(`<div class="ficha-mapa presencia ${esc(pr.tipo || 'enemigo')}${pr.derrotado ? ' caido' : ''}" data-ficha="${esc(k)}" style="left:${p.x}%;top:${p.y}%${src ? `;background-image:url(${src})` : ''}" role="img" aria-label="${esc(pr.nombre)}">${src ? '' : letra}<span class="etq">${esc(pr.nombre)}</span></div>`);
+    fichas.push(`<div class="ficha-mapa presencia ${esc(pr.tipo || 'enemigo')}${pr.derrotado ? ' caido' : ''}${pr.oculto ? ' oculta' : ''}" data-ficha="${esc(k)}" style="left:${p.x}%;top:${p.y}%${src ? `;background-image:url(${src})` : ''}" role="img" aria-label="${esc(pr.nombre)}">${src ? '' : letra}<span class="etq">${esc(pr.nombre)}</span></div>`);
   });
   return `<div class="mapa${editable ? ' editable' : ''}" id="mapa" data-mapa="${esc(clave)}"><img src="${mapa.src}" alt="Mapa: ${esc(mapa.nombre)}" draggable="false">${fichas.join('')}</div>`;
 }
@@ -179,13 +191,16 @@ function pjMini(id) {
 }
 
 function htmlPresencias() {
-  const lista = porOrden(E.presencias);
+  const lista = presenciasVisibles();
   if (!lista.length) return '';
   return `<section class="panel">
     <h2 class="panel-titulo">En escena</h2>
     <div class="guardianes">${lista.map(([k, p]) => {
       const est = Object.keys(p.estados || {});
-      return `<div class="guardian ${esc(p.tipo || 'enemigo')}${p.derrotado ? ' caido' : ''}${esTurnoDe('pr', k) ? ' turno' : ''}">${srcDe(p.img) ? `<img class="guardian-foto" src="${srcDe(p.img)}" alt="">` : ''}<div style="flex:1;min-width:0"><div class="guardian-nombre">${esc(p.nombre)}</div><div class="guardian-info">${esc(TIPOS_PRESENCIA[p.tipo] || 'Enemigo')}${p.derrotado ? ' · Derrotado' : p.dano ? ` · ${p.dano} de daño recibido` : ''}</div></div><div class="pj-chips" style="justify-content:flex-end;margin:0">${est.map((x) => `<span class="chip est">${esc(x)}</span>`).join('')}</div></div>`;
+      // Con PV del banco la mesa muestra la salud aproximada, nunca los números
+      const salud = !p.derrotado && +p.pvMax > 0 ? saludAprox(pvPr(p), +p.pvMax) : null;
+      const info = p.derrotado ? ' · Derrotado' : salud ? '' : p.dano ? ` · ${p.dano} de daño recibido` : '';
+      return `<div class="guardian ${esc(p.tipo || 'enemigo')}${p.derrotado ? ' caido' : ''}${p.oculto ? ' oculta' : ''}${esTurnoDe('pr', k) ? ' turno' : ''}">${srcDe(p.img) ? `<img class="guardian-foto" src="${srcDe(p.img)}" alt="">` : ''}<div style="flex:1;min-width:0"><div class="guardian-nombre">${esc(p.nombre)}${p.oculto ? ' <span class="tenue">(oculto)</span>' : ''}</div><div class="guardian-info">${esc(TIPOS_PRESENCIA[p.tipo] || 'Enemigo')}${info}</div></div><div class="pj-chips" style="justify-content:flex-end;margin:0">${salud ? `<span class="chip salud ${salud.clase}">${salud.texto}</span>` : ''}${est.map((x) => `<span class="chip est">${esc(x)}</span>`).join('')}</div></div>`;
     }).join('')}</div>
   </section>`;
 }
@@ -215,6 +230,7 @@ function participantes() {
 }
 const presencia = (k) => (E.presencias || {})[k] || null;
 const derrotadoP = (p) => p.tipo === 'pr' && !!(presencia(p.ref) || {}).derrotado;
+const ocultoP = (p) => p.tipo === 'pr' && !!(presencia(p.ref) || {}).oculto;
 const nombreP = (p) => (p.tipo === 'pj' ? F(p.ref).nombre : p.tipo === 'pr' ? (presencia(p.ref) || {}).nombre : '') || p.nombre;
 const colorP = (p) => (p.tipo === 'pj' ? F(p.ref).color : p.tipo === 'pr' ? COLOR_TIPO[(presencia(p.ref) || {}).tipo] || COLOR_TIPO.enemigo : '#a89e8b');
 const turnoDe = () => { const c = C(); return c.activo ? (c.participantes || {})[c.turno] || null : null; };
@@ -224,7 +240,7 @@ function htmlIniciativa() {
   const c = C(); if (!c.activo) return '';
   return `<section class="panel iniciativa">
     <h2 class="panel-titulo">${icono('espadas')} Iniciativa <span class="extra">Ronda ${c.ronda}</span></h2>
-    <ol class="orden">${participantes().map(([pid, p]) => `<li class="${pid === c.turno ? 'actual' : ''}${derrotadoP(p) ? ' caido' : ''}" style="--c:${colorP(p)}"><span class="ini num">${p.ini === '' || p.ini == null ? '—' : esc(p.ini)}</span><span class="quien">${esc(nombreP(p))}</span>${pid === c.turno ? '<span class="su-turno">Su turno</span>' : ''}</li>`).join('')}</ol>
+    <ol class="orden">${participantes().filter(([, p]) => !ocultoP(p) || verOcultos()).map(([pid, p]) => `<li class="${pid === c.turno ? 'actual' : ''}${derrotadoP(p) ? ' caido' : ''}" style="--c:${colorP(p)}"><span class="ini num">${p.ini === '' || p.ini == null ? '—' : esc(p.ini)}</span><span class="quien">${esc(nombreP(p))}${ocultoP(p) ? ' <span class="tenue">(oculto)</span>' : ''}</span>${pid === c.turno ? '<span class="su-turno">Su turno</span>' : ''}</li>`).join('')}</ol>
   </section>`;
 }
 
@@ -349,7 +365,7 @@ function vistaHoja(id) {
   const datos = [f.raza, [f.clase, f.subclase].filter(Boolean).join(' · '), f.nivel ? `Nivel ${f.nivel}` : '', f.edad, f.alineamiento].filter(Boolean).join(' · ');
   const t = turnoDe();
   const mio = !!t && t.tipo === 'pj' && t.ref === id;
-  const banner = C().activo ? `<div class="ancho banner-turno${mio ? ' mio' : ''}" role="status">${icono('espadas')}<span>${mio ? '¡Es tu turno!' : `Ronda ${C().ronda} · Turno de ${esc(t ? nombreP(t) : '—')}`}</span></div>` : '';
+  const banner = C().activo ? `<div class="ancho banner-turno${mio ? ' mio' : ''}" role="status">${icono('espadas')}<span>${mio ? '¡Es tu turno!' : `Ronda ${C().ronda} · Turno de ${esc(!t ? '—' : ocultoP(t) && !esDM() ? 'alguien más' : nombreP(t))}`}</span></div>` : '';
   return `<div class="hoja" style="--c:${f.color}">
     ${banner}
     <section class="panel ancho cabeza">
@@ -697,8 +713,8 @@ function vistaConfigDM() {
 function vistaDM() {
   if (!(E.campana || {}).pinDM) return vistaConfigDM();
   if (!esDM()) return vistaPin('dm');
-  const tabs = [['mesa', 'Mesa'], ['personajes', 'Personajes'], ['biblioteca', 'Biblioteca'], ['reglas', 'Reglas'], ['ajustes', 'Ajustes']];
-  const cuerpo = { mesa: dmMesa, personajes: dmPersonajes, biblioteca: dmBiblioteca, reglas: () => vistaReglasSRD('dm', ui.reglas.dm, render), ajustes: dmAjustes }[ui.dmTab]();
+  const tabs = [['mesa', 'Mesa'], ['personajes', 'Personajes'], ['banco', 'Banco PNJ'], ['biblioteca', 'Biblioteca'], ['reglas', 'Reglas'], ['ajustes', 'Ajustes']];
+  const cuerpo = { mesa: dmMesa, personajes: dmPersonajes, banco: dmBanco, biblioteca: dmBiblioteca, reglas: () => vistaReglasSRD('dm', ui.reglas.dm, render), ajustes: dmAjustes }[ui.dmTab]();
   return `<div class="seg" role="tablist" aria-label="Secciones del DM">${tabs.map(([k, t]) => `<button type="button" role="tab" aria-selected="${ui.dmTab === k}" data-accion="dm-tab" data-tab="${k}">${t}</button>`).join('')}</div>${cuerpo}`;
 }
 
@@ -717,6 +733,7 @@ function dmCombate() {
         ${pid === c.turno ? '<span class="su-turno">Su turno</span>' : `<button type="button" class="btn btn-peq" data-accion="turno-a" data-pid="${pid}">Darle el turno</button>`}
         <button type="button" class="btn btn-peq btn-peligro" data-accion="cb-quitar" data-pid="${pid}" aria-label="Quitar a ${esc(nombreP(p))} del combate">×</button></li>`).join('')}</ol>
       <p class="sub" style="margin-top:14px">Sumar al combate</p>
+      <p class="tenue" style="margin:0 0 6px;font-size:14px">Si dejas la iniciativa vacía y es un PNJ del banco, se tira sola.</p>
       <div class="form-grid tres">
         <div><label class="etq" for="cb-add">Quién</label><select class="campo" id="cb-add" data-borrador><option value="">Otro (escribe el nombre)</option>${fuera.map(([v, n]) => `<option value="${esc(v)}"${ui.borradores['cb-add'] === v ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></div>
         <div><label class="etq" for="cb-add-nombre">Nombre (si es otro)</label><input class="campo" id="cb-add-nombre" data-borrador value="${val('cb-add-nombre')}"></div>
@@ -735,7 +752,7 @@ function dmCombate() {
   }
   const cands = [
     ...listaPj().map(([id]) => ({ k: `pj-${id}`, nombre: F(id).nombre, mod: F(id).iniciativa || '', def: true, color: F(id).color })),
-    ...porOrden(E.presencias).filter(([, p]) => !p.derrotado).map(([k, p]) => ({ k: `pr-${k}`, nombre: p.nombre, mod: '', def: p.tipo !== 'neutral', color: COLOR_TIPO[p.tipo] || COLOR_TIPO.enemigo })),
+    ...porOrden(E.presencias).filter(([, p]) => !p.derrotado).map(([k, p]) => ({ k: `pr-${k}`, nombre: p.nombre, mod: p.ini || '', def: p.tipo !== 'neutral', color: COLOR_TIPO[p.tipo] || COLOR_TIPO.enemigo })),
   ];
   return `<section class="panel">
     <h2 class="panel-titulo">${icono('espadas')} Preparar combate</h2>
@@ -744,6 +761,7 @@ function dmCombate() {
       <label class="check"><input type="checkbox" id="cb-${x.k}" data-borrador-check${marcado ? ' checked' : ''}> ${esc(x.nombre)}${x.mod ? ` <span class="tenue num">(${esc(x.mod)})</span>` : ''}</label>
       <label class="sr" for="ini-${x.k}">Iniciativa de ${esc(x.nombre)}</label><input class="campo num ini-in" id="ini-${x.k}" type="number" inputmode="numeric" placeholder="—" data-borrador value="${val('ini-' + x.k)}">
       <button type="button" class="btn btn-peq" data-accion="tirar" data-k="${x.k}" data-mod="${esc(x.mod)}">Tirar</button></li>`; }).join('')}</ul>` : '<p class="tenue">No hay personajes ni presencias en escena todavía.</p>'}
+    ${cands.some((x) => x.k.startsWith('pr-')) ? '<div class="fila" style="margin-top:10px"><button type="button" class="btn btn-peq" data-accion="tirar-pnj">Tirar la iniciativa de todos los PNJ</button></div>' : ''}
     <p class="sub" style="margin-top:12px">Otro combatiente (opcional)</p>
     <div class="form-grid dos"><div><label class="etq" for="cb-extra-nombre">Nombre</label><input class="campo" id="cb-extra-nombre" data-borrador value="${val('cb-extra-nombre')}"></div><div><label class="etq" for="cb-extra-ini">Iniciativa</label><input class="campo num" id="cb-extra-ini" type="number" inputmode="numeric" data-borrador value="${val('cb-extra-ini')}"></div></div>
     <div class="fila" style="margin-top:14px"><button type="button" class="btn btn-oro" data-accion="empezar-combate">Empezar combate</button><button type="button" class="btn" data-accion="cancelar-combate">Cancelar</button></div>
@@ -782,6 +800,25 @@ function dmRelojes() {
   </section>`;
 }
 
+function filaPresenciaDM(k, p) {
+  const est = Object.keys(p.estados || {});
+  const conPv = +p.pvMax > 0; const pv = pvPr(p);
+  const salud = conPv && !p.derrotado ? saludAprox(pv, +p.pvMax) : null;
+  const t = plantillaDe(p);
+  const ataques = (p.ataques || []).filter((a) => a && a.nombre);
+  return `<div class="recurso pr-dm${p.oculto ? ' oculta' : ''}${esTurnoDe('pr', k) ? ' turno' : ''}"><div style="min-width:0;flex:1">
+    <div class="recurso-nombre">${esc(p.nombre)} <span class="tenue">· ${esc(TIPOS_PRESENCIA[p.tipo] || 'Enemigo')}${p.oculto ? ' · oculto en la mesa' : ''}</span></div>
+    ${conPv ? `<div class="recurso-det num">${p.derrotado ? 'Derrotado · ' : ''}PV <b style="color:var(--texto)">${pv}</b>/${p.pvMax}${p.ca !== '' && p.ca != null ? ` · CA ${esc(p.ca)}` : ''}${salud ? ` · la mesa ve «${salud.texto}»` : ''}</div><div class="barra-pv ${nivelPv(pv, +p.pvMax)}" style="margin:5px 0 2px"><span style="width:${pct(pv, +p.pvMax)}%"></span></div>`
+      : `<div class="recurso-det">${p.derrotado ? 'Derrotado' : `${p.dano || 0} de daño recibido`}${p.ca !== '' && p.ca != null ? ` · CA ${esc(p.ca)}` : ''}</div>`}
+    <div class="pj-chips">${est.map((x) => `<span class="chip est">${esc(x)}<button type="button" data-accion="pr-estado-quitar" data-k="${esc(k)}" data-e="${esc(x)}" aria-label="Quitar ${esc(x)}">×</button></span>`).join('')}</div>
+    ${conPv ? `<div class="agregar"><label class="sr" for="pr-cant-${esc(k)}">Cantidad de PV para ${esc(p.nombre)}</label><input id="pr-cant-${esc(k)}" type="number" min="1" inputmode="numeric" placeholder="PV" data-borrador data-enter="pr-cant" data-k="${esc(k)}" data-tipo="dano" value="${val('pr-cant-' + k)}"><button type="button" class="btn btn-peq btn-peligro" data-accion="pr-cant" data-k="${esc(k)}" data-tipo="dano">Daño</button><button type="button" class="btn btn-peq btn-bien" data-accion="pr-cant" data-k="${esc(k)}" data-tipo="cura">Curar</button></div>` : ''}
+    <div class="agregar"><label class="sr" for="pr-est-${esc(k)}">Estado</label><input id="pr-est-${esc(k)}" placeholder="Estado" data-borrador data-enter="pr-estado" data-k="${esc(k)}" value="${val('pr-est-' + k)}"><button type="button" class="btn btn-peq" data-accion="pr-estado" data-k="${esc(k)}">Añadir</button></div>
+    ${ataques.length ? `<div class="atq-lista">${ataques.map((a, i) => { const bono = bonoNum(a.bono); const conDado = !!tirarExpr(a.dano); return `<div class="atq"><span class="atq-nombre">${esc(a.nombre)}</span><span class="fila" style="gap:6px">${bono != null ? `<button type="button" class="btn btn-peq" data-accion="pr-atacar" data-k="${esc(k)}" data-i="${i}">Atacar ${bono >= 0 ? '+' : '−'}${Math.abs(bono)}</button>` : a.bono ? `<span class="chip">${esc(a.bono)}</span>` : ''}${conDado ? `<button type="button" class="btn btn-peq" data-accion="pr-dano-tirar" data-k="${esc(k)}" data-i="${i}" title="${esc(a.dano)}">Daño</button><button type="button" class="btn btn-peq" data-accion="pr-dano-tirar" data-k="${esc(k)}" data-i="${i}" data-crit="1" title="Crítico: dobla los dados">Crít.</button>` : ''}</span></div>`; }).join('')}</div>` : ''}
+    ${t ? `<details class="pl-perfil" data-abrir="m:${esc(k)}"${ui.abiertos.has('m:' + k) ? ' open' : ''}><summary>Perfil de ${esc(t.nombre)}</summary>${htmlPerfil(t)}</details>` : ''}
+  </div>
+  <div class="fila" style="flex:none;justify-content:flex-end;max-width:200px">${conPv ? '' : `<button type="button" class="btn btn-red btn-peq" data-accion="pr-dano" data-k="${esc(k)}" data-d="-1" aria-label="Quitar daño">−</button><button type="button" class="btn btn-red btn-peq" data-accion="pr-dano" data-k="${esc(k)}" data-d="1" aria-label="Sumar daño">+</button>`}<button type="button" class="btn btn-peq" data-accion="pr-derrotado" data-k="${esc(k)}">${p.derrotado ? 'Revivir' : 'Derrotado'}</button><button type="button" class="btn btn-peq${p.oculto ? ' btn-oro' : ''}" data-accion="pr-oculto" data-k="${esc(k)}">${p.oculto ? 'Mostrar' : 'Ocultar'}</button><button type="button" class="btn btn-peq btn-peligro" data-accion="pr-quitar" data-k="${esc(k)}">Quitar</button></div></div>`;
+}
+
 function dmMesa() {
   const e = E.escena || {};
   const clave = mapaActual();
@@ -790,25 +827,23 @@ function dmMesa() {
   return `<div class="narrador">
     <div class="columna">
       ${dmCombate()}
+      ${dmTiradas()}
       <section class="panel">
         <h2 class="panel-titulo">En escena</h2>
         <p class="tenue" style="font-size:15px;margin:0 0 8px">Enemigos, aliados y personajes no jugadores que aparecen en el mapa y en la mesa.</p>
+        ${listaBanco().length ? `<p class="sub" style="margin-top:4px">Desde el banco</p>
+        <div class="fila" style="flex-wrap:nowrap;gap:8px"><label class="sr" for="pl-rapido">Plantilla del banco</label><select class="campo" id="pl-rapido" data-borrador style="flex:1;min-width:0">${opcionesBanco(ui.borradores['pl-rapido'] || '')}</select>
+          <label class="sr" for="pl-rapido-cant">Cuántos</label><input class="campo num campo-cant" id="pl-rapido-cant" type="number" min="1" max="20" inputmode="numeric" data-borrador value="${val('pl-rapido-cant', '1')}"></div>
+        ${opcionesEscena()}
+        <div class="fila" style="margin:8px 0 4px"><button type="button" class="btn btn-peq btn-oro" data-accion="pl-escena" data-desde="rapido">Poner en escena</button></div>
+        <p class="sub" style="margin-top:12px">O uno a mano</p>` : `<p class="tenue" style="font-size:14px;margin:0 0 8px">Crea plantillas en DM → Banco PNJ para ponerlas aquí con sus PV, CA y ataques.</p>`}
         <div class="form-grid tres">
           <div><label class="etq" for="pr-nombre">Nombre</label><input class="campo" id="pr-nombre" data-borrador data-enter="pr-agregar" value="${val('pr-nombre')}"></div>
           <div><label class="etq" for="pr-tipo">Tipo</label><select class="campo" id="pr-tipo" data-borrador>${Object.entries(TIPOS_PRESENCIA).map(([k, t]) => `<option value="${k}"${(ui.borradores['pr-tipo'] || 'enemigo') === k ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
           <div><label class="etq" for="pr-img">Retrato</label><select class="campo" id="pr-img" data-borrador>${opcionesImg(ui.borradores['pr-img'] || '', (i) => i.tipo === 'retrato', 'Sin retrato')}</select></div>
         </div>
         <div class="fila" style="margin:10px 0 4px"><button type="button" class="btn btn-peq btn-oro" data-accion="pr-agregar">Poner en escena</button></div>
-        ${porOrden(E.presencias).map(([k, p]) => {
-          const est = Object.keys(p.estados || {});
-          return `<div class="recurso"><div style="min-width:0;flex:1">
-            <div class="recurso-nombre">${esc(p.nombre)} <span class="tenue">· ${esc(TIPOS_PRESENCIA[p.tipo] || 'Enemigo')}</span></div>
-            <div class="recurso-det">${p.derrotado ? 'Derrotado' : `${p.dano || 0} de daño recibido`}</div>
-            <div class="pj-chips">${est.map((x) => `<span class="chip est">${esc(x)}<button type="button" data-accion="pr-estado-quitar" data-k="${esc(k)}" data-e="${esc(x)}" aria-label="Quitar ${esc(x)}">×</button></span>`).join('')}</div>
-            <div class="agregar"><label class="sr" for="pr-est-${esc(k)}">Estado</label><input id="pr-est-${esc(k)}" placeholder="Estado" data-borrador data-enter="pr-estado" data-k="${esc(k)}" value="${val('pr-est-' + k)}"><button type="button" class="btn btn-peq" data-accion="pr-estado" data-k="${esc(k)}">Añadir</button></div>
-          </div>
-          <div class="fila" style="flex:none;justify-content:flex-end;max-width:190px"><button type="button" class="btn btn-red btn-peq" data-accion="pr-dano" data-k="${esc(k)}" data-d="-1" aria-label="Quitar daño">−</button><button type="button" class="btn btn-red btn-peq" data-accion="pr-dano" data-k="${esc(k)}" data-d="1" aria-label="Sumar daño">+</button><button type="button" class="btn btn-peq" data-accion="pr-derrotado" data-k="${esc(k)}">${p.derrotado ? 'Revivir' : 'Derrotado'}</button><button type="button" class="btn btn-peq btn-peligro" data-accion="pr-quitar" data-k="${esc(k)}">Quitar</button></div></div>`;
-        }).join('')}
+        ${porOrden(E.presencias).map(([k, p]) => filaPresenciaDM(k, p)).join('')}
       </section>
       <section class="panel">
         <h2 class="panel-titulo">Pistas del grupo</h2>
@@ -887,6 +922,157 @@ function dmPersonajes() {
       </section>`;
     }).join('')}</div>
   </div>`;
+}
+
+/* ---------- Banco de PNJ ---------- */
+// Borradores del banco que se conservan al limpiar el formulario
+const PL_PERSISTE = ['pl-buscar', 'pl-opt-oculto', 'pl-opt-tirarpv', 'pl-opt-combate', 'pl-rapido', 'pl-rapido-cant'];
+const CAMPOS_PL = ['nombre', 'grupo', 'tipo', 'img', 'vd', 'desc', 'ca', 'caNota', 'pv', 'dadosPv', 'velocidad', 'ini', 'notas'];
+const LISTAS_PL = {
+  otros: { etq: 'Salvaciones, habilidades, sentidos, idiomas, resistencias…', ayuda: 'Uno por línea', ej: 'Habilidades: Sigilo +6\nSentidos: Visión en la oscuridad 18 m; Percepción pasiva 9\nIdiomas: Común, Goblin' },
+  ataques: { etq: 'Ataques (con botones para tirar)', ayuda: 'Uno por línea: Nombre | bono | daño', ej: 'Cimitarra | +4 | 1d6 + 2 cortante\nArco corto | +4 | 1d6 + 2 perforante' },
+  rasgos: { etq: 'Rasgos', ayuda: 'Uno por línea: Nombre: descripción', ej: 'Escapada ágil: Puede Destrabarse o Esconderse como acción adicional.' },
+  acciones: { etq: 'Otras acciones y reacciones', ayuda: 'Una por línea: Nombre: descripción', ej: 'Multiataque: Hace dos ataques con la cimitarra.' },
+};
+const gruposBanco = () => [...new Set(listaBanco().map(([, t]) => (t.grupo || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+const lineaStats = (t) => [t.ca !== '' && t.ca != null ? `CA ${t.ca}` : '', +t.pv > 0 ? `PV ${t.pv}${t.dadosPv ? ` (${t.dadosPv})` : ''}` : t.dadosPv ? `PV ${t.dadosPv}` : '', t.ini ? `Ini ${t.ini}` : '', t.vd ? `VD ${t.vd}` : ''].filter(Boolean).join(' · ');
+const avatarPl = (t, clase = 'pl-avatar') => (srcDe(t.img) ? `<img class="${clase}" src="${srcDe(t.img)}" alt="">` : `<span class="${clase} avatar-ini ${esc(t.tipo || 'enemigo')}" aria-hidden="true">${esc((t.nombre || '?').slice(0, 2).replace(/^./, (c) => c.toUpperCase()))}</span>`);
+
+function htmlPerfil(t) {
+  const atr = ATRIBUTOS.filter((a) => (t.atributos || {})[a] !== '' && (t.atributos || {})[a] != null);
+  const bloque = (titulo, lista) => ((lista || []).length ? `<p class="sub">${titulo}</p>${lista.map((r) => `<div class="rasgo"><b>${esc(r.nombre)}</b>${r.texto ? `<p>${esc(r.texto)}</p>` : ''}</div>`).join('')}` : '');
+  return `<div class="perfil">
+    ${t.desc ? `<p class="perfil-desc">${esc(t.desc)}</p>` : ''}
+    <ul class="lista perfil-datos">
+      <li><span>Clase de armadura</span><span class="val">${esc(dato(t.ca))}${t.caNota ? ` <span class="tenue">(${esc(t.caNota)})</span>` : ''}</span></li>
+      <li><span>Puntos de golpe</span><span class="val">${esc(+t.pv > 0 ? t.pv : '—')}${t.dadosPv ? ` <span class="tenue">(${esc(t.dadosPv)})</span>` : ''}</span></li>
+      ${t.velocidad ? `<li><span>Velocidad</span><span class="val">${esc(t.velocidad)}</span></li>` : ''}
+      ${t.ini ? `<li><span>Iniciativa</span><span class="val">${esc(t.ini)}</span></li>` : ''}
+      ${t.vd ? `<li><span>Valor de desafío</span><span class="val">${esc(t.vd)}</span></li>` : ''}
+    </ul>
+    ${atr.length ? `<div class="perfil-atr">${atr.map((a) => `<div><span>${a}</span><b class="num">${esc(t.atributos[a])}</b><small class="num">${mod(+t.atributos[a])}</small></div>`).join('')}</div>` : ''}
+    ${(t.otros || []).length ? `<ul class="vinetas perfil-otros">${t.otros.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+    ${bloque('Rasgos', t.rasgos)}
+    ${(t.ataques || []).length ? `<p class="sub">Ataques</p><ul class="lista">${t.ataques.map((a) => `<li><span>${esc(a.nombre)}</span><span class="val">${esc([a.bono, a.dano].filter(Boolean).join(' · '))}</span></li>`).join('')}</ul>` : ''}
+    ${bloque('Otras acciones', t.acciones)}
+    ${t.notas ? `<div class="lista-campo secreto" style="margin-top:10px"><span class="etq">Notas del DM</span><p class="pre" style="margin:4px 0 0">${esc(t.notas)}</p></div>` : ''}
+  </div>`;
+}
+
+function cargarPlantilla(id, copia = false) {
+  limpiar('pl-', PL_PERSISTE);
+  const t = id === 'nuevo' ? { tipo: 'enemigo' } : (E.banco || {})[id] || {};
+  const b = ui.borradores;
+  for (const k of CAMPOS_PL) b['pl-' + k] = t[k] ?? '';
+  if (copia) b['pl-nombre'] = `${t.nombre} (copia)`;
+  for (const a of ATRIBUTOS) b['pl-atr-' + a] = (t.atributos || {})[a] ?? '';
+  b['pl-otros'] = (t.otros || []).join('\n');
+  b['pl-ataques'] = listaATexto('ataques', t.ataques);
+  b['pl-rasgos'] = listaATexto('rasgos', t.rasgos);
+  b['pl-acciones'] = listaATexto('rasgos', t.acciones);
+  ui.editandoPl = copia ? 'nuevo' : id;
+}
+
+function formPlantilla() {
+  const ed = ui.editandoPl && ui.editandoPl !== 'nuevo' ? (E.banco || {})[ui.editandoPl] : null;
+  const campo = (k, etq, extra = '') => `<div><label class="etq" for="pl-${k}">${etq}</label><input class="campo" id="pl-${k}" data-borrador value="${val('pl-' + k)}" ${extra}></div>`;
+  return `<section class="panel editor" id="form-plantilla">
+    <h2 class="panel-titulo">${ed ? `Editar «${esc(ed.nombre)}»` : 'Nueva plantilla'}</h2>
+    <p class="tenue" style="margin:0 0 6px;font-size:15px">Todo es opcional menos el nombre. Con PV la mesa muestra su salud aproximada; con ataques tendrás botones para tirarlos.</p>
+    <p class="sub">Quién es</p>
+    <div class="form-grid">
+      ${campo('nombre', 'Nombre *', 'placeholder="Ej. Bandido"')}
+      <div><label class="etq" for="pl-grupo">Grupo (bosque, arco 1, no muertos…)</label><input class="campo" id="pl-grupo" data-borrador list="pl-grupos" value="${val('pl-grupo')}"><datalist id="pl-grupos">${gruposBanco().map((g) => `<option value="${esc(g)}">`).join('')}</datalist></div>
+      <div><label class="etq" for="pl-tipo">Llega a la escena como</label><select class="campo" id="pl-tipo" data-borrador>${Object.entries(TIPOS_PRESENCIA).map(([k, t]) => `<option value="${k}"${(ui.borradores['pl-tipo'] || 'enemigo') === k ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
+      <div><label class="etq" for="pl-img">Retrato</label><select class="campo" id="pl-img" data-borrador>${opcionesImg(ui.borradores['pl-img'] || '', (i) => i.tipo === 'retrato', 'Sin retrato')}</select></div>
+      ${campo('desc', 'Tamaño, tipo y alineamiento', 'placeholder="Ej. Humanoide mediano, neutral"')}
+      ${campo('vd', 'Valor de desafío', 'placeholder="Ej. 1/8"')}
+    </div>
+    <p class="sub">Combate</p>
+    <div class="form-grid">
+      ${campo('ca', 'Clase de armadura', 'type="number" min="0" inputmode="numeric"')}
+      ${campo('caNota', 'Nota de la CA (ej. armadura de cuero)')}
+      ${campo('pv', 'PV (promedio)', 'type="number" min="1" inputmode="numeric"')}
+      ${campo('dadosPv', 'Dados de golpe (ej. 2d8 + 2)')}
+      ${campo('velocidad', 'Velocidad')}
+      ${campo('ini', 'Modificador de iniciativa (ej. +2)')}
+    </div>
+    <p class="sub">Atributos</p>
+    <div class="form-grid seis">${ATRIBUTOS.map((a) => `<div><label class="etq" for="pl-atr-${a}" title="${NOMBRE_ATRIBUTO[a]}">${a}</label><input class="campo num" id="pl-atr-${a}" type="number" min="1" max="30" inputmode="numeric" data-borrador value="${val('pl-atr-' + a)}"></div>`).join('')}</div>
+    ${Object.entries(LISTAS_PL).map(([k, l]) => `<div class="lista-campo"><label class="etq" for="pl-${k}">${l.etq}</label><p class="ayuda">${esc(l.ayuda)}</p><textarea class="campo" id="pl-${k}" data-borrador placeholder="${esc(l.ej)}">${val('pl-' + k)}</textarea></div>`).join('')}
+    <div class="lista-campo secreto"><label class="etq" for="pl-notas">Notas del DM</label><p class="ayuda">Táctica, botín, qué sabe… Nunca salen en la mesa.</p><textarea class="campo" id="pl-notas" data-borrador style="min-height:70px">${val('pl-notas')}</textarea></div>
+    <div class="fila" style="margin-top:16px"><button type="button" class="btn btn-oro" data-accion="pl-guardar">${ed ? 'Guardar cambios' : 'Añadir al banco'}</button>${ui.editandoPl || ui.borradores['pl-nombre'] ? '<button type="button" class="btn" data-accion="pl-cancelar">Cancelar</button>' : ''}</div>
+  </section>`;
+}
+
+// Opciones al poner copias en escena (compartidas entre el banco y la Mesa)
+function opcionesEscena() {
+  const b = ui.borradores;
+  return `<div class="pl-opciones">
+    <label class="check"><input type="checkbox" id="pl-opt-oculto" data-borrador-check${b['pl-opt-oculto'] ? ' checked' : ''}> Llegan ocultos (no salen en la TV hasta que los muestres)</label>
+    <label class="check"><input type="checkbox" id="pl-opt-tirarpv" data-borrador-check${b['pl-opt-tirarpv'] ? ' checked' : ''}> Tirar los PV de cada copia con sus dados de golpe</label>
+    ${C().activo ? `<label class="check"><input type="checkbox" id="pl-opt-combate" data-borrador-check${(b['pl-opt-combate'] ?? true) ? ' checked' : ''}> Sumarlos al combate en curso tirando su iniciativa</label>` : ''}
+  </div>`;
+}
+const opcionesBanco = (sel) => {
+  const grupos = new Map();
+  for (const [k, t] of listaBanco()) { const g = (t.grupo || '').trim(); if (!grupos.has(g)) grupos.set(g, []); grupos.get(g).push([k, t]); }
+  const opt = ([k, t]) => `<option value="${esc(k)}"${sel === k ? ' selected' : ''}>${esc(t.nombre)}${lineaStats(t) ? ` · ${esc(lineaStats(t))}` : ''}</option>`;
+  return [...grupos.entries()].sort(([a], [b]) => (!a) - (!b) || a.localeCompare(b, 'es')).map(([g, l]) => (grupos.size > 1 || g ? `<optgroup label="${esc(g || 'Sin grupo')}">${l.map(opt).join('')}</optgroup>` : l.map(opt).join(''))).join('');
+};
+
+function dmBanco() {
+  const q = norm(ui.borradores['pl-buscar']);
+  const todos = listaBanco();
+  const lista = q ? todos.filter(([, t]) => norm(`${t.nombre} ${t.grupo || ''} ${t.desc || ''}`).includes(q)) : todos;
+  const grupos = new Map();
+  for (const [k, t] of lista) { const g = (t.grupo || '').trim(); if (!grupos.has(g)) grupos.set(g, []); grupos.get(g).push([k, t]); }
+  const orden = [...grupos.keys()].sort((a, b) => (!a) - (!b) || a.localeCompare(b, 'es'));
+  const item = ([k, t]) => `<li class="pl-item">
+    <div class="pl-cab">${avatarPl(t)}<div style="min-width:0;flex:1"><div class="pl-nombre">${esc(t.nombre)} <span class="tenue">· ${esc(TIPOS_PRESENCIA[t.tipo] || 'Enemigo')}</span></div>${t.desc ? `<div class="pl-desc">${esc(t.desc)}</div>` : ''}${lineaStats(t) ? `<div class="pl-desc num">${esc(lineaStats(t))}</div>` : ''}</div></div>
+    <div class="fila pl-acc">
+      <span class="fila" style="gap:6px;flex:none"><label class="sr" for="pl-cant-${esc(k)}">Cuántos</label><input class="campo num campo-cant" id="pl-cant-${esc(k)}" type="number" min="1" max="20" inputmode="numeric" data-borrador value="${val('pl-cant-' + k, '1')}"><button type="button" class="btn btn-peq btn-oro" data-accion="pl-escena" data-id="${esc(k)}">A escena</button></span>
+      <button type="button" class="btn btn-peq" data-accion="pl-editar" data-id="${esc(k)}">Editar</button>
+      <button type="button" class="btn btn-peq" data-accion="pl-duplicar" data-id="${esc(k)}">Duplicar</button>
+      ${botonConfirmar('borrar-pl-' + k, 'Borrar', 'pl-borrar', `data-id="${esc(k)}"`, 'btn btn-peq btn-peligro')}
+    </div>
+    <details class="pl-perfil" data-abrir="b:${esc(k)}"${ui.abiertos.has('b:' + k) ? ' open' : ''}><summary>Ver perfil</summary>${htmlPerfil(t)}</details>
+  </li>`;
+  const cuerpo = !todos.length ? '<div class="vacio" style="margin-top:12px">El banco está vacío. Crea tu primera plantilla con el formulario o importa un archivo.</div>'
+    : !lista.length ? '<p class="tenue" style="margin:12px 0 0">Ninguna plantilla coincide con la búsqueda.</p>'
+    : orden.map((g) => {
+      const clave = `p:${g || 'sin'}`; const l = grupos.get(g);
+      const ul = `<ul class="pl-lista">${l.map(item).join('')}</ul>`;
+      if (orden.length === 1 && !g) return ul;
+      return `<details class="grupo-bib" data-plegar="${esc(clave)}"${q ? ' open' : abiertoAttr(clave)}><summary><span class="grupo-nombre">${esc(g || 'Sin grupo')} <span class="tenue">(${l.length})</span></span></summary>${ul}</details>`;
+    }).join('');
+  return `<div class="narrador">
+    <div class="columna">
+      <section class="panel">
+        <h2 class="panel-titulo">Banco de PNJ <span class="extra">${todos.length} ${todos.length === 1 ? 'plantilla' : 'plantillas'}</span></h2>
+        <p class="tenue" style="margin:0 0 10px;font-size:15px">Enemigos, aliados y personajes no jugadores que puedes usar una y otra vez. «A escena» crea copias numeradas (Bandido 1, Bandido 2…), cada una con sus propios PV y estados, en DM → Mesa.</p>
+        <div class="fila" style="margin-bottom:10px">
+          <button type="button" class="btn btn-peq btn-oro" data-accion="pl-nuevo">Nueva plantilla</button>
+          <label class="btn btn-peq" for="imp-banco">Importar</label><input type="file" id="imp-banco" class="sr" accept=".json,application/json" data-cambio="importar-banco">
+          ${todos.length ? '<button type="button" class="btn btn-peq" data-accion="exportar-banco">Exportar</button>' : ''}
+        </div>
+        ${todos.length ? `<label class="sr" for="pl-buscar">Buscar en el banco</label><input class="campo" style="width:100%" id="pl-buscar" type="search" placeholder="Buscar por nombre, grupo o tipo" data-borrador data-filtro value="${val('pl-buscar')}">${opcionesEscena()}` : ''}
+        ${cuerpo}
+      </section>
+    </div>
+    <div class="columna">${formPlantilla()}</div>
+  </div>`;
+}
+
+function dmTiradas() {
+  const modos = [['normal', 'Normal'], ['ventaja', 'Ventaja'], ['desventaja', 'Desventaja']];
+  return `<section class="panel">
+    <h2 class="panel-titulo">Tiradas del DM</h2>
+    <p class="tenue" style="margin:0 0 8px;font-size:14px">Solo se ven en este dispositivo. La ventaja o desventaja se aplica a los ataques de los PNJ.</p>
+    <div class="seg seg-peq" role="group" aria-label="Modo de los ataques">${modos.map(([k, t]) => `<button type="button" aria-pressed="${ui.modoTirada === k}" data-accion="modo-tirada" data-m="${k}">${t}</button>`).join('')}</div>
+    <div class="agregar"><label class="sr" for="tl-expr">Tirada libre</label><input id="tl-expr" placeholder="Tirada libre, ej. 2d6 + 3 o d20" data-borrador data-enter="tirada-libre" value="${val('tl-expr')}"><button type="button" class="btn btn-peq" data-accion="tirada-libre">Tirar</button></div>
+    ${ui.tiradas.length ? `<ul class="tiradas">${ui.tiradas.map((x) => `<li class="${esc(x.clase || '')}"><div><b>${esc(x.texto)}</b><small>${esc(x.detalle || '')}</small></div><span class="tenue num">${hora(x.ts)}</span></li>`).join('')}</ul><div class="fila" style="margin-top:8px"><button type="button" class="btn btn-peq" data-accion="tiradas-limpiar">Limpiar</button></div>` : ''}
+  </section>`;
 }
 
 const ETIQUETA_SUB = { mundo: 'Subtítulo (opcional)', pnj: 'Quién es (ej. Herrero de la aldea)', lugares: 'Estado (ej. Sin explorar)', objetos: 'Detalle (ej. Lo tiene la guerrera)', inscripciones: 'Dónde está', misterios: '' };
@@ -1037,7 +1223,7 @@ function dmAjustes() {
       </section>
       <section class="panel zona-peligro">
         <h2 class="panel-titulo">Empezar de cero</h2>
-        <p style="margin:0 0 10px">Borra toda la campaña: personajes, imágenes, Historia, escena y el PIN del DM. No se puede deshacer.</p>
+        <p style="margin:0 0 10px">Borra toda la campaña: personajes, banco de PNJ, imágenes, Historia, escena y el PIN del DM. No se puede deshacer.</p>
         ${botonConfirmar('borrar-todo', 'Borrar toda la campaña', 'borrar-todo', '', 'btn btn-peligro')}
       </section>
     </div>
@@ -1320,7 +1506,7 @@ const ACCIONES = {
     const add = (tipo, ref, nombre, ini, desempate) => { part[nuevoId('c')] = { tipo, ref, nombre, ini, desempate }; };
     const ini = (k) => { const v = parseInt(ui.borradores['ini-' + k], 10); return Number.isFinite(v) ? v : ''; };
     for (const [id] of listaPj()) if (ui.borradores['cb-pj-' + id] ?? true) { const des = (F(id).atributos || {}).DES; add('pj', id, F(id).nombre, ini('pj-' + id), des === '' || des == null ? 0 : Math.floor((+des - 10) / 2)); }
-    for (const [k, p] of porOrden(E.presencias)) if (!p.derrotado && (ui.borradores['cb-pr-' + k] ?? p.tipo !== 'neutral')) add('pr', k, p.nombre, ini('pr-' + k), 0);
+    for (const [k, p] of porOrden(E.presencias)) if (!p.derrotado && (ui.borradores['cb-pr-' + k] ?? p.tipo !== 'neutral')) add('pr', k, p.nombre, ini('pr-' + k), modDe(p.ini));
     const extra = (ui.borradores['cb-extra-nombre'] || '').trim();
     if (extra) { const v = parseInt(ui.borradores['cb-extra-ini'], 10); add('otro', '', extra, Number.isFinite(v) ? v : '', 0); }
     if (!Object.keys(part).length) { aviso('Marca al menos a un combatiente'); return; }
@@ -1351,7 +1537,9 @@ const ACCIONES = {
     let tipo = 'otro', ref = '', nombre = ($('#cb-add-nombre').value || '').trim();
     if (sel) { [tipo, ref] = sel.split(':'); nombre = tipo === 'pj' ? F(ref).nombre : (presencia(ref) || {}).nombre; }
     if (!nombre) { aviso('Elige a alguien o escribe un nombre'); return; }
-    sync.escribir({ [`combate/participantes/${nuevoId('c')}`]: { tipo, ref, nombre, ini, desempate: 0 } });
+    let iniFinal = ini; const m = tipo === 'pr' ? modDe((presencia(ref) || {}).ini) : 0;
+    if (iniFinal === '' && tipo === 'pr' && (presencia(ref) || {}).ini) { iniFinal = tirarD20().nat + m; registrar(`Iniciativa de ${nombre}: ${iniFinal}`, `d20 ${m >= 0 ? '+' : '−'} ${Math.abs(m)}`); }
+    sync.escribir({ [`combate/participantes/${nuevoId('c')}`]: { tipo, ref, nombre, ini: iniFinal, desempate: m } });
     limpiar('cb-add'); aviso(`${nombre} entra al combate`);
   },
   'fin-combate'() {
@@ -1412,6 +1600,7 @@ const ACCIONES = {
   'pr-estado-quitar'(d) { sync.escribir({ [`presencias/${d.k}/estados/${claveSegura(d.e)}`]: null }); },
   'pr-quitar'(d) {
     const u = { [`presencias/${d.k}`]: null };
+    for (const [pid, x] of Object.entries(C().participantes || {})) if (x.tipo === 'pr' && x.ref === d.k) { u[`combate/participantes/${pid}`] = null; if (C().turno === pid) { const l = participantes().filter(([q]) => q !== pid); const i = participantes().findIndex(([q]) => q === pid); u['combate/turno'] = l.length ? l[Math.min(i, l.length - 1)][0] : ''; } }
     for (const m of Object.keys(E.fichas || {})) if ((E.fichas[m] || {})[d.k]) u[`fichas/${m}/${d.k}`] = null;
     sync.escribir(u);
   },
@@ -1477,6 +1666,7 @@ const ACCIONES = {
     if ((E.escena || {}).mapa === d.id) { u['escena/mapa'] = ''; u[`fichas/${d.id}`] = null; }
     for (const [id, p] of Object.entries(E.personajes || {})) if ((p.ficha || {}).retrato === d.id) u[`personajes/${id}/ficha/retrato`] = '';
     for (const [k, p] of Object.entries(E.presencias || {})) if (p.img === d.id) u[`presencias/${k}/img`] = '';
+    for (const [k, t] of Object.entries(E.banco || {})) if (t && t.img === d.id) u[`banco/${k}/img`] = '';
     ui.confirmar = null; sync.escribir(u); aviso('Imagen borrada');
   },
   'ent-editar'(d) {
@@ -1559,6 +1749,96 @@ const ACCIONES = {
     sync.escribir(u); aviso('Grupo borrado; sus entradas quedaron sin grupo');
   },
   'ent-borrar'(d) { ui.confirmar = null; if (ui.editandoEnt && ui.editandoEnt.id === d.id) { limpiar('ent-', ['ent-cat', 'ent-grupo']); ui.editandoEnt = null; } sync.escribir({ [`enciclopedia/${d.cat}/${d.id}`]: null }); aviso('Entrada borrada'); },
+
+  /* DM: banco de PNJ */
+  'pl-nuevo'() { cargarPlantilla('nuevo'); render(); const f = $('#form-plantilla'); if (f) f.scrollIntoView({ block: 'start' }); const n = $('#pl-nombre'); if (n) n.focus({ preventScroll: true }); },
+  'pl-editar'(d) { cargarPlantilla(d.id); render(); const f = $('#form-plantilla'); if (f) f.scrollIntoView({ block: 'start' }); },
+  'pl-duplicar'(d) { cargarPlantilla(d.id, true); render(); const f = $('#form-plantilla'); if (f) f.scrollIntoView({ block: 'start' }); aviso('Cambia lo que quieras y guárdala como plantilla nueva'); },
+  'pl-cancelar'() { ui.editandoPl = null; limpiar('pl-', PL_PERSISTE); },
+  'pl-guardar'() {
+    const b = ui.borradores;
+    const g = (k) => String(b['pl-' + k] ?? '').trim();
+    const nombre = g('nombre');
+    if (!nombre) { aviso('Ponle nombre a la plantilla'); $('#pl-nombre').focus(); return; }
+    const nuevo = !ui.editandoPl || ui.editandoPl === 'nuevo';
+    const id = nuevo ? nuevoId('pl') : ui.editandoPl;
+    const previo = nuevo ? {} : (E.banco || {})[id] || {};
+    const num = (k) => { const v = parseInt(g(k), 10); return Number.isFinite(v) ? v : ''; };
+    const t = {
+      nombre, grupo: g('grupo'), tipo: g('tipo') || 'enemigo', img: g('img'), vd: g('vd'), desc: g('desc'),
+      ca: num('ca'), caNota: g('caNota'), pv: num('pv') || promedio(g('dadosPv')) || '', dadosPv: g('dadosPv'), velocidad: g('velocidad'), ini: g('ini'),
+      atributos: Object.fromEntries(ATRIBUTOS.map((a) => { const v = parseInt(b['pl-atr-' + a], 10); return [a, Number.isFinite(v) ? v : '']; })),
+      otros: lineas(g('otros')), ataques: textoALista('ataques', g('ataques')), rasgos: textoALista('rasgos', g('rasgos')), acciones: textoALista('rasgos', g('acciones')),
+      notas: g('notas'), orden: previo.orden || Date.now(),
+    };
+    if (t.ini && /^\d/.test(t.ini)) t.ini = '+' + t.ini; // "2" → "+2"
+    sync.escribir({ [`banco/${id}`]: t });
+    ui.editandoPl = null; limpiar('pl-', PL_PERSISTE);
+    if (t.grupo) { plegados.delete(`p:${t.grupo}`); ls.set('mesa-plegados', JSON.stringify([...plegados])); }
+    aviso(nuevo ? `«${nombre}» quedó en el banco` : 'Plantilla guardada');
+  },
+  'pl-borrar'(d) {
+    ui.confirmar = null;
+    const t = (E.banco || {})[d.id]; if (!t) return;
+    if (ui.editandoPl === d.id) { ui.editandoPl = null; limpiar('pl-', PL_PERSISTE); }
+    sync.escribir({ [`banco/${d.id}`]: null }); aviso(`«${t.nombre}» salió del banco (lo que ya está en escena se queda)`);
+  },
+  'pl-escena'(d) {
+    const rapido = d.desde === 'rapido';
+    const id = rapido ? (($('#pl-rapido') || {}).value || '') : d.id;
+    const el = $(rapido ? '#pl-rapido-cant' : `#pl-cant-${id}`);
+    ponerEnEscena(id, parseInt(el && el.value, 10) || 1);
+    if (!rapido) delete ui.borradores['pl-cant-' + id];
+  },
+  'exportar-banco'() { exportarBanco(); },
+
+  /* PNJ en escena: PV, ataques y tiradas */
+  'pr-cant'(d) {
+    const p = presencia(d.k); if (!p) return;
+    const el = $('#pr-cant-' + d.k); const n = parseInt(el && el.value, 10);
+    if (!n || n < 0) { aviso('Escribe una cantidad primero'); if (el) el.focus(); return; }
+    const antes = pvPr(p);
+    const dano = d.tipo === 'cura' ? Math.max(0, (+p.dano || 0) - n) : Math.min(+p.pvMax, (+p.dano || 0) + n);
+    const u = { [`presencias/${d.k}/dano`]: dano };
+    const despues = Math.max(0, +p.pvMax - dano);
+    if (despues <= 0 && !p.derrotado) u[`presencias/${d.k}/derrotado`] = true;
+    if (despues > 0 && p.derrotado && d.tipo === 'cura') u[`presencias/${d.k}/derrotado`] = false;
+    delete ui.borradores['pr-cant-' + d.k];
+    sync.escribir(u);
+    aviso(despues <= 0 ? `${p.nombre} cae (0 PV)` : `${p.nombre}: ${despues - antes > 0 ? '+' : '−'}${Math.abs(despues - antes)} PV → ${despues}/${p.pvMax}`);
+  },
+  'pr-oculto'(d) { const p = presencia(d.k); if (!p) return; sync.escribir({ [`presencias/${d.k}/oculto`]: !p.oculto }); aviso(p.oculto ? `${p.nombre} ya se ve en la mesa` : `${p.nombre} quedó oculto en la mesa`); },
+  'pr-atacar'(d) {
+    const p = presencia(d.k); const a = p && (p.ataques || [])[+d.i]; if (!a) return;
+    const bono = bonoNum(a.bono) ?? 0;
+    const r = tirarD20(ui.modoTirada); const total = r.nat + bono;
+    const extra = r.nat === 20 ? ' ¡Crítico!' : r.nat === 1 ? ' · 1 natural, falla' : '';
+    const dados = r.dados.length > 1 ? `d20 [${r.dados.join(', ')}] con ${ui.modoTirada}` : `d20 [${r.nat}]`;
+    registrar(`${p.nombre} · ${a.nombre}: ${total}${extra}`, `${dados} ${bono >= 0 ? '+' : '−'} ${Math.abs(bono)}${r.nat !== 1 ? ` · acierta contra CA ${total} o menos` : ''}`, r.nat === 20 ? 'critico' : r.nat === 1 ? 'pifia' : '');
+  },
+  'pr-dano-tirar'(d) {
+    const p = presencia(d.k); const a = p && (p.ataques || [])[+d.i]; if (!a) return;
+    const crit = !!d.crit; const r = tirarExpr(a.dano, crit); if (!r) { aviso('Ese daño no tiene dados'); return; }
+    const tipoDano = String(a.dano).replace(/[\d\sdD+\-−–]+/g, ' ').replace(/\s+/g, ' ').trim();
+    registrar(`${p.nombre} · ${a.nombre}: ${r.total} de daño${tipoDano ? ' ' + tipoDano : ''}${crit ? ' (crítico)' : ''}`, r.detalle, crit ? 'critico' : '');
+  },
+  'modo-tirada'(d) { ui.modoTirada = d.m; },
+  'tirada-libre'() {
+    const el = $('#tl-expr'); const t = ((el && el.value) || '').trim();
+    if (!t) { aviso('Escribe una tirada, por ejemplo 2d6 + 3'); if (el) el.focus(); return; }
+    const r = tirarExpr(t); if (!r) { aviso('No entendí la tirada. Prueba con algo como 1d20 + 5'); return; }
+    registrar(`${t}: ${r.total}`, r.detalle);
+  },
+  'tiradas-limpiar'() { ui.tiradas = []; },
+  'tirar-pnj'() {
+    const hechas = [];
+    for (const [k, p] of porOrden(E.presencias)) {
+      if (p.derrotado) continue;
+      const m = modDe(p.ini); const v = tirarD20().nat + m;
+      ui.borradores['ini-pr-' + k] = String(v); hechas.push(`${p.nombre} ${v}`);
+    }
+    if (hechas.length) registrar('Iniciativa de los PNJ', hechas.join(' · '));
+  },
 
   /* DM: ajustes */
   'aj-guardar'() {
@@ -1704,6 +1984,84 @@ function exportarFichas() {
   if (descargar(`personajes-${slugCampana()}.json`, texto)) aviso('Fichas exportadas');
 }
 
+/* ---------- Banco de PNJ: tiradas, copias, importar y exportar ---------- */
+function registrar(texto, detalle = '', clase = '') {
+  ui.tiradas.unshift({ texto, detalle, clase, ts: Date.now() });
+  ui.tiradas = ui.tiradas.slice(0, 12);
+  aviso(texto);
+}
+
+// Nombres para n copias: «Bandido» si es el único; si no, «Bandido 1», «Bandido 2»… siguiendo los que ya estén en escena
+function nombresCopias(base, n) {
+  const re = new RegExp('^' + norm(base).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?: (\\d+))?$');
+  let max = 0; let hay = false;
+  for (const p of Object.values(E.presencias || {})) { const m = norm(p.nombre).match(re); if (m) { hay = true; max = Math.max(max, m[1] ? +m[1] : 1); } }
+  if (!hay && n === 1) return [base];
+  return Array.from({ length: n }, (_, i) => `${base} ${max + i + 1}`);
+}
+
+function ponerEnEscena(tid, cant) {
+  const t = (E.banco || {})[tid];
+  if (!t) { aviso('Elige una plantilla del banco'); return; }
+  cant = Math.max(1, Math.min(20, cant || 1));
+  const b = ui.borradores;
+  const oculto = !!b['pl-opt-oculto'];
+  const tirarPv = !!b['pl-opt-tirarpv'] && !!t.dadosPv;
+  const alCombate = !!C().activo && (b['pl-opt-combate'] ?? true);
+  const mod = modDe(t.ini);
+  const u = {}; const base = Date.now(); const inis = [];
+  nombresCopias(t.nombre, cant).forEach((nombre, i) => {
+    let pvMax = +t.pv || 0;
+    if (tirarPv) { const r = tirarExpr(t.dadosPv); if (r) pvMax = Math.max(1, r.total); }
+    const k = nuevoId('pr') + i;
+    u[`presencias/${k}`] = { nombre, tipo: t.tipo || 'enemigo', img: t.img || '', dano: 0, derrotado: false, orden: base + i, plantilla: tid, pvMax: pvMax || '', ca: t.ca ?? '', ini: t.ini || '', ataques: (t.ataques || []).map((a) => ({ nombre: a.nombre || '', bono: a.bono || '', dano: a.dano || '' })), oculto };
+    if (alCombate) { const v = tirarD20().nat + mod; u[`combate/participantes/${nuevoId('c')}${i}`] = { tipo: 'pr', ref: k, nombre, ini: v, desempate: mod }; inis.push(`${nombre} ${v}`); }
+  });
+  sync.escribir(u);
+  if (inis.length) registrar(`Iniciativa: ${inis.join(' · ')}`, `d20 ${mod >= 0 ? '+' : '−'} ${Math.abs(mod)}`);
+  aviso(`${cant === 1 ? `${t.nombre} está` : `${cant} × ${t.nombre} están`} en escena${oculto ? ' (ocultos en la mesa)' : ''}${inis.length ? ' y en el combate' : ''}`);
+}
+
+const FORMATO_BANCO = 'mesa-del-dm/banco';
+function exportarBanco() {
+  const plantillas = listaBanco().map(([, t]) => {
+    const x = { ...t, retrato: (imgs()[t.img] || {}).nombre || '' };
+    delete x.img; delete x.orden;
+    return x;
+  });
+  if (descargar(`banco-pnj-${slugCampana()}.json`, JSON.stringify({ formato: FORMATO_BANCO, version: 1, plantillas }, null, 2))) aviso('Banco exportado');
+}
+
+async function importarBanco(file) {
+  let datos;
+  try { datos = JSON.parse(await file.text()); } catch (e) { aviso('Ese archivo no es un JSON válido'); return; }
+  const lista = Array.isArray(datos) ? datos : datos && (datos.plantillas || datos.pnj || datos.monstruos);
+  if (!Array.isArray(lista) || !lista.length) { aviso('El archivo no trae plantillas'); return; }
+  const comoTexto = (v, campo) => (Array.isArray(v) ? (campo === 'otros' ? v.map(String) : v) : textoALista(campo === 'acciones' ? 'rasgos' : campo, String(v || '')));
+  const imagenPorNombre = (n) => (Object.entries(imgs()).find(([, i]) => norm(i.nombre) === norm(n)) || [])[0] || '';
+  const u = {}; let nuevas = 0, actualizadas = 0;
+  lista.forEach((x, i) => {
+    const nombre = String((x && (x.nombre || x.name)) || '').trim(); if (!nombre) return;
+    const existe = listaBanco().find(([, t]) => norm(t.nombre) === norm(nombre));
+    const num = (v) => { const n = parseInt(v, 10); return Number.isFinite(n) ? n : ''; };
+    const t = {
+      nombre, grupo: String(x.grupo || '').trim(), tipo: TIPOS_PRESENCIA[x.tipo] ? x.tipo : 'enemigo', vd: String(x.vd ?? ''), desc: String(x.desc || x.descripcion || ''),
+      ca: num(x.ca), caNota: String(x.caNota || ''), dadosPv: String(x.dadosPv || ''), velocidad: String(x.velocidad || ''), ini: String(x.ini ?? x.iniciativa ?? ''),
+      atributos: Object.fromEntries(ATRIBUTOS.map((a) => [a, num((x.atributos || {})[a])])),
+      otros: Array.isArray(x.otros) ? x.otros.map(String) : lineas(x.otros), ataques: comoTexto(x.ataques, 'ataques'), rasgos: comoTexto(x.rasgos, 'rasgos'), acciones: comoTexto(x.acciones, 'acciones'),
+      notas: String(x.notas || x.notasDM || ''),
+    };
+    t.pv = num(x.pv) || promedio(t.dadosPv) || '';
+    const ret = String(x.retrato || x.imagen || '').trim();
+    t.img = ret ? imagenPorNombre(ret) : '';
+    if (existe) { u[`banco/${existe[0]}`] = { ...existe[1], ...t, img: t.img || existe[1].img || '' }; actualizadas++; }
+    else { u[`banco/${nuevoId('pl')}${i}`] = { ...t, orden: Date.now() + i }; nuevas++; }
+  });
+  if (!nuevas && !actualizadas) { aviso('Ninguna plantilla tenía nombre'); return; }
+  await sync.escribir(u);
+  aviso(`Banco: ${nuevas} nueva${nuevas === 1 ? '' : 's'}${actualizadas ? `, ${actualizadas} actualizada${actualizadas === 1 ? '' : 's'}` : ''}`);
+}
+
 const CAMBIOS = {
   'ent-cat'() { render(); },
   ini(t) { const v = parseInt(t.value, 10); sync.escribir({ [`combate/participantes/${t.dataset.pid}/ini`]: Number.isFinite(v) ? v : '' }); },
@@ -1712,6 +2070,7 @@ const CAMBIOS = {
   amb(t) { sync.escribir({ [`ambiente/${t.dataset.campo}`]: t.value }); },
   async importar(t) { const f = t.files && t.files[0]; t.value = ''; if (f) await importarFichas(f); },
   async 'importar-historia'(t) { const f = t.files && t.files[0]; t.value = ''; if (f) await importarHistoria(f); },
+  async 'importar-banco'(t) { const f = t.files && t.files[0]; t.value = ''; if (f) await importarBanco(f); },
 };
 
 // Ejecuta una acción y vuelve a dibujar al final, para que los formularios se limpien
@@ -1731,6 +2090,7 @@ document.addEventListener('click', (ev) => {
 document.addEventListener('input', (ev) => {
   const t = ev.target;
   if (t.dataset && 'borrador' in t.dataset && t.id) ui.borradores[t.id] = t.value;
+  if (t.dataset && 'filtro' in t.dataset) { clearTimeout(render.f); render.f = setTimeout(render, 160); }
   if (t.dataset && t.dataset.buscar) { ui.reglas[t.dataset.buscar].q = t.value; clearTimeout(render.t); render.t = setTimeout(render, 140); }
   if (t.dataset && t.dataset.notas) { clearTimeout(guardarNotas.t); guardarNotas.t = setTimeout(() => guardarNotas(t.dataset.notas, t.value), 700); }
 });
@@ -1742,6 +2102,7 @@ document.addEventListener('change', (ev) => {
 });
 document.addEventListener('toggle', (ev) => {
   const t = ev.target;
+  if (t && t.dataset && t.dataset.abrir) { if (t.open) ui.abiertos.add(t.dataset.abrir); else ui.abiertos.delete(t.dataset.abrir); return; }
   if (!t || !t.dataset || !t.dataset.plegar) return;
   if (t.open) plegados.delete(t.dataset.plegar); else plegados.add(t.dataset.plegar);
   ls.set('mesa-plegados', JSON.stringify([...plegados]));
