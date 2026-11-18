@@ -1,7 +1,7 @@
-import { ATRIBUTOS, NOMBRE_ATRIBUTO, COLORES, CATEGORIAS, TIPOS_PRESENCIA, MOMENTOS, LUCES, CLIMAS, TEMPERATURAS, fichaVacia } from './datos.js?v=20261117a';
-import { crearSync, claveSegura } from './sync.js?v=20261117a';
-import { vista as vistaReglasSRD } from './reglas.js?v=20261117a';
-import { tirarExpr, tirarD20, bonoNum, modDe, promedio, saludAprox } from './dados.js?v=20261117a';
+import { ATRIBUTOS, NOMBRE_ATRIBUTO, COLORES, CATEGORIAS, TIPOS_PRESENCIA, MOMENTOS, LUCES, CLIMAS, TEMPERATURAS, fichaVacia } from './datos.js?v=20261117b';
+import { crearSync, claveSegura } from './sync.js?v=20261117b';
+import { vista as vistaReglasSRD } from './reglas.js?v=20261117b';
+import { tirarExpr, tirarD20, bonoNum, modDe, promedio, saludAprox } from './dados.js?v=20261117b';
 
 /* ================= UTILIDADES ================= */
 const $ = (s, r = document) => r.querySelector(s);
@@ -1819,7 +1819,7 @@ const ACCIONES = {
   'pr-dano-tirar'(d) {
     const p = presencia(d.k); const a = p && (p.ataques || [])[+d.i]; if (!a) return;
     const crit = !!d.crit; const r = tirarExpr(a.dano, crit); if (!r) { aviso('Ese daño no tiene dados'); return; }
-    const tipoDano = String(a.dano).replace(/[\d\sdD+\-−–]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const tipoDano = String(a.dano).replace(/\d*\s*[dD]\d+|[+\-−–]|\d+/g, ' ').replace(/\s+/g, ' ').trim(); // solo quita dados y números: «contundente» queda entero
     registrar(`${p.nombre} · ${a.nombre}: ${r.total} de daño${tipoDano ? ' ' + tipoDano : ''}${crit ? ' (crítico)' : ''}`, r.detalle, crit ? 'critico' : '');
   },
   'modo-tirada'(d) { ui.modoTirada = d.m; },

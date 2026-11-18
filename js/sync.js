@@ -1,8 +1,8 @@
 // Sincronización del estado compartido.
 // Modo demostración: localStorage + BroadcastChannel (pestañas del mismo dispositivo).
 // Modo en vivo: Firebase Realtime Database (todos los dispositivos).
-import { ESTADO_VACIO, VERSION } from './datos.js?v=20261117a';
-import { FIREBASE_CONFIG, PARTIDA_ID } from '../config.js?v=20261117a';
+import { ESTADO_VACIO, VERSION } from './datos.js?v=20261117b';
+import { FIREBASE_CONFIG, PARTIDA_ID } from '../config.js?v=20261117b';
 
 const CLAVE = 'mesa-estado-' + PARTIDA_ID;
 const VERSION_FB = '10.12.2';
