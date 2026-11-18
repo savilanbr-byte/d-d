@@ -1,7 +1,7 @@
-import { ATRIBUTOS, NOMBRE_ATRIBUTO, COLORES, CATEGORIAS, TIPOS_PRESENCIA, MOMENTOS, LUCES, CLIMAS, TEMPERATURAS, fichaVacia } from './datos.js?v=20261117b';
-import { crearSync, claveSegura } from './sync.js?v=20261117b';
-import { vista as vistaReglasSRD } from './reglas.js?v=20261117b';
-import { tirarExpr, tirarD20, bonoNum, modDe, promedio, saludAprox } from './dados.js?v=20261117b';
+import { ATRIBUTOS, NOMBRE_ATRIBUTO, COLORES, CATEGORIAS, TIPOS_PRESENCIA, MOMENTOS, LUCES, CLIMAS, TEMPERATURAS, fichaVacia } from './datos.js?v=20261117c';
+import { crearSync, claveSegura } from './sync.js?v=20261117c';
+import { vista as vistaReglasSRD } from './reglas.js?v=20261117c';
+import { tirarExpr, tirarD20, bonoNum, modDe, promedio, saludAprox } from './dados.js?v=20261117c';
 
 /* ================= UTILIDADES ================= */
 const $ = (s, r = document) => r.querySelector(s);
@@ -729,10 +729,11 @@ function dmCombate() {
       <div class="fila" style="margin-bottom:12px"><button type="button" class="btn" data-accion="turno" data-d="-1">◀ Anterior</button><button type="button" class="btn btn-oro" data-accion="turno" data-d="1">Siguiente turno ▶</button></div>
       <ol class="orden dm">${lista.map(([pid, p]) => `<li class="${pid === c.turno ? 'actual' : ''}${derrotadoP(p) ? ' caido' : ''}" style="--c:${colorP(p)}">
         <label class="sr" for="cini-${pid}">Iniciativa de ${esc(nombreP(p))}</label><input class="campo num ini-in" id="cini-${pid}" type="number" inputmode="numeric" value="${esc(p.ini ?? '')}" data-cambio="ini" data-pid="${pid}">
-        <span class="quien">${esc(nombreP(p))}${derrotadoP(p) ? ' <span class="tenue">(derrotado, se salta)</span>' : ''}</span>
+        <span class="quien">${esc(nombreP(p))}${derrotadoP(p) ? ' <span class="tenue">(derrotado, se salta)</span>' : ocultoP(p) ? ' <span class="tenue">(oculto en la mesa)</span>' : ''}</span>
         ${pid === c.turno ? '<span class="su-turno">Su turno</span>' : `<button type="button" class="btn btn-peq" data-accion="turno-a" data-pid="${pid}">Darle el turno</button>`}
         <button type="button" class="btn btn-peq btn-peligro" data-accion="cb-quitar" data-pid="${pid}" aria-label="Quitar a ${esc(nombreP(p))} del combate">×</button></li>`).join('')}</ol>
-      <p class="sub" style="margin-top:14px">Sumar al combate</p>
+      ${htmlBancoCombate()}
+      <p class="sub" style="margin-top:14px">Sumar a alguien que ya está en escena u otro</p>
       <p class="tenue" style="margin:0 0 6px;font-size:14px">Si dejas la iniciativa vacía y es un PNJ del banco, se tira sola.</p>
       <div class="form-grid tres">
         <div><label class="etq" for="cb-add">Quién</label><select class="campo" id="cb-add" data-borrador><option value="">Otro (escribe el nombre)</option>${fuera.map(([v, n]) => `<option value="${esc(v)}"${ui.borradores['cb-add'] === v ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></div>
@@ -752,7 +753,7 @@ function dmCombate() {
   }
   const cands = [
     ...listaPj().map(([id]) => ({ k: `pj-${id}`, nombre: F(id).nombre, mod: F(id).iniciativa || '', def: true, color: F(id).color })),
-    ...porOrden(E.presencias).filter(([, p]) => !p.derrotado).map(([k, p]) => ({ k: `pr-${k}`, nombre: p.nombre, mod: p.ini || '', def: p.tipo !== 'neutral', color: COLOR_TIPO[p.tipo] || COLOR_TIPO.enemigo })),
+    ...porOrden(E.presencias).filter(([, p]) => !p.derrotado).map(([k, p]) => ({ k: `pr-${k}`, nombre: p.nombre + (p.oculto ? ' (oculto)' : ''), mod: p.ini || '', def: p.tipo !== 'neutral', color: COLOR_TIPO[p.tipo] || COLOR_TIPO.enemigo })),
   ];
   return `<section class="panel">
     <h2 class="panel-titulo">${icono('espadas')} Preparar combate</h2>
@@ -762,6 +763,7 @@ function dmCombate() {
       <label class="sr" for="ini-${x.k}">Iniciativa de ${esc(x.nombre)}</label><input class="campo num ini-in" id="ini-${x.k}" type="number" inputmode="numeric" placeholder="—" data-borrador value="${val('ini-' + x.k)}">
       <button type="button" class="btn btn-peq" data-accion="tirar" data-k="${x.k}" data-mod="${esc(x.mod)}">Tirar</button></li>`; }).join('')}</ul>` : '<p class="tenue">No hay personajes ni presencias en escena todavía.</p>'}
     ${cands.some((x) => x.k.startsWith('pr-')) ? '<div class="fila" style="margin-top:10px"><button type="button" class="btn btn-peq" data-accion="tirar-pnj">Tirar la iniciativa de todos los PNJ</button></div>' : ''}
+    ${htmlBancoCombate()}
     <p class="sub" style="margin-top:12px">Otro combatiente (opcional)</p>
     <div class="form-grid dos"><div><label class="etq" for="cb-extra-nombre">Nombre</label><input class="campo" id="cb-extra-nombre" data-borrador value="${val('cb-extra-nombre')}"></div><div><label class="etq" for="cb-extra-ini">Iniciativa</label><input class="campo num" id="cb-extra-ini" type="number" inputmode="numeric" data-borrador value="${val('cb-extra-ini')}"></div></div>
     <div class="fila" style="margin-top:14px"><button type="button" class="btn btn-oro" data-accion="empezar-combate">Empezar combate</button><button type="button" class="btn" data-accion="cancelar-combate">Cancelar</button></div>
@@ -1006,12 +1008,24 @@ function formPlantilla() {
 }
 
 // Opciones al poner copias en escena (compartidas entre el banco y la Mesa)
-function opcionesEscena() {
+function opcionesEscena(pre = 'pl', conCombate = true) {
   const b = ui.borradores;
   return `<div class="pl-opciones">
-    <label class="check"><input type="checkbox" id="pl-opt-oculto" data-borrador-check${b['pl-opt-oculto'] ? ' checked' : ''}> Llegan ocultos (no salen en la TV hasta que los muestres)</label>
-    <label class="check"><input type="checkbox" id="pl-opt-tirarpv" data-borrador-check${b['pl-opt-tirarpv'] ? ' checked' : ''}> Tirar los PV de cada copia con sus dados de golpe</label>
-    ${C().activo ? `<label class="check"><input type="checkbox" id="pl-opt-combate" data-borrador-check${(b['pl-opt-combate'] ?? true) ? ' checked' : ''}> Sumarlos al combate en curso tirando su iniciativa</label>` : ''}
+    <label class="check"><input type="checkbox" id="${pre}-opt-oculto" data-borrador-check${b[pre + '-opt-oculto'] ? ' checked' : ''}> Llegan ocultos (no salen en la TV hasta que los muestres)</label>
+    <label class="check"><input type="checkbox" id="${pre}-opt-tirarpv" data-borrador-check${b[pre + '-opt-tirarpv'] ? ' checked' : ''}> Tirar los PV de cada copia con sus dados de golpe</label>
+    ${conCombate && C().activo ? `<label class="check"><input type="checkbox" id="${pre}-opt-combate" data-borrador-check${(b[pre + '-opt-combate'] ?? true) ? ' checked' : ''}> Sumarlos al combate en curso tirando su iniciativa</label>` : ''}
+  </div>`;
+}
+
+// Bloque del panel de combate para traer PNJ del banco (al preparar o con el combate en curso)
+function htmlBancoCombate() {
+  if (!listaBanco().length) return `<p class="sub" style="margin-top:14px">Enemigos del banco</p><p class="tenue" style="margin:0;font-size:14px">Crea plantillas en DM → Banco PNJ para sumarlas aquí con sus PV, CA, ataques e iniciativa.</p>`;
+  return `<div class="cb-banco">
+    <p class="sub" style="margin-top:0">Sumar desde el banco</p>
+    <div class="fila" style="flex-wrap:nowrap;gap:8px"><label class="sr" for="cbpl-sel">Plantilla del banco</label><select class="campo" id="cbpl-sel" data-borrador style="flex:1;min-width:0">${opcionesBanco(ui.borradores['cbpl-sel'] || '')}</select>
+      <label class="sr" for="cbpl-cant">Cuántos</label><input class="campo num campo-cant" id="cbpl-cant" type="number" min="1" max="20" inputmode="numeric" data-borrador data-enter="cb-banco" value="${val('cbpl-cant', '1')}"></div>
+    ${opcionesEscena('cbpl', false)}
+    <div class="fila" style="margin-top:8px"><button type="button" class="btn btn-peq btn-oro" data-accion="cb-banco">Sumar al combate</button><span class="tenue" style="font-size:14px">Entran en escena con su iniciativa ya tirada.</span></div>
   </div>`;
 }
 const opcionesBanco = (sel) => {
@@ -1791,6 +1805,12 @@ const ACCIONES = {
     if (!rapido) delete ui.borradores['pl-cant-' + id];
   },
   'exportar-banco'() { exportarBanco(); },
+  'cb-banco'() {
+    const id = (($('#cbpl-sel') || {}).value || '');
+    const el = $('#cbpl-cant');
+    ponerEnEscena(id, parseInt(el && el.value, 10) || 1, 'cbpl', C().activo ? 'combate' : 'prep');
+    delete ui.borradores['cbpl-cant'];
+  },
 
   /* PNJ en escena: PV, ataques y tiradas */
   'pr-cant'(d) {
@@ -2000,14 +2020,15 @@ function nombresCopias(base, n) {
   return Array.from({ length: n }, (_, i) => `${base} ${max + i + 1}`);
 }
 
-function ponerEnEscena(tid, cant) {
+// modo: 'escena' (según la casilla de combate), 'prep' (deja su iniciativa tirada en Preparar combate) o 'combate' (entran al combate en curso)
+function ponerEnEscena(tid, cant, pre = 'pl', modo = 'escena') {
   const t = (E.banco || {})[tid];
   if (!t) { aviso('Elige una plantilla del banco'); return; }
   cant = Math.max(1, Math.min(20, cant || 1));
   const b = ui.borradores;
-  const oculto = !!b['pl-opt-oculto'];
-  const tirarPv = !!b['pl-opt-tirarpv'] && !!t.dadosPv;
-  const alCombate = !!C().activo && (b['pl-opt-combate'] ?? true);
+  const oculto = !!b[pre + '-opt-oculto'];
+  const tirarPv = !!b[pre + '-opt-tirarpv'] && !!t.dadosPv;
+  const alCombate = !!C().activo && (modo === 'combate' || (modo === 'escena' && (b[pre + '-opt-combate'] ?? true)));
   const mod = modDe(t.ini);
   const u = {}; const base = Date.now(); const inis = [];
   nombresCopias(t.nombre, cant).forEach((nombre, i) => {
@@ -2016,10 +2037,11 @@ function ponerEnEscena(tid, cant) {
     const k = nuevoId('pr') + i;
     u[`presencias/${k}`] = { nombre, tipo: t.tipo || 'enemigo', img: t.img || '', dano: 0, derrotado: false, orden: base + i, plantilla: tid, pvMax: pvMax || '', ca: t.ca ?? '', ini: t.ini || '', ataques: (t.ataques || []).map((a) => ({ nombre: a.nombre || '', bono: a.bono || '', dano: a.dano || '' })), oculto };
     if (alCombate) { const v = tirarD20().nat + mod; u[`combate/participantes/${nuevoId('c')}${i}`] = { tipo: 'pr', ref: k, nombre, ini: v, desempate: mod }; inis.push(`${nombre} ${v}`); }
+    else if (modo === 'prep') { const v = tirarD20().nat + mod; b['ini-pr-' + k] = String(v); b['cb-pr-' + k] = true; inis.push(`${nombre} ${v}`); }
   });
   sync.escribir(u);
   if (inis.length) registrar(`Iniciativa: ${inis.join(' · ')}`, `d20 ${mod >= 0 ? '+' : '−'} ${Math.abs(mod)}`);
-  aviso(`${cant === 1 ? `${t.nombre} está` : `${cant} × ${t.nombre} están`} en escena${oculto ? ' (ocultos en la mesa)' : ''}${inis.length ? ' y en el combate' : ''}`);
+  aviso(`${cant === 1 ? `${t.nombre} está` : `${cant} × ${t.nombre} están`} en escena${oculto ? ' (ocultos en la mesa)' : ''}${alCombate ? ' y en el combate' : modo === 'prep' ? ', listos para el combate' : ''}`);
 }
 
 const FORMATO_BANCO = 'mesa-del-dm/banco';

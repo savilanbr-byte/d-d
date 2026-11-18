@@ -655,3 +655,4 @@ details.grupo-bib:not([open]) { padding-bottom: 0; }
 .tiradas li.critico { border-left-color: var(--bien); background: rgba(121, 194, 122, .1); }
 .tiradas li.pifia { border-left-color: var(--peligro); background: rgba(224, 86, 75, .08); }
 @media (max-width: 520px) { .perfil-atr { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.cb-banco { margin-top: 14px; padding: 10px 12px; border-radius: 9px; border: 1px dashed var(--linea); background: rgba(0, 0, 0, .14); }
