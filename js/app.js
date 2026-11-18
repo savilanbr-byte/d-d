@@ -1,7 +1,7 @@
-import { ATRIBUTOS, NOMBRE_ATRIBUTO, COLORES, CATEGORIAS, TIPOS_PRESENCIA, MOMENTOS, LUCES, CLIMAS, TEMPERATURAS, fichaVacia } from './datos.js?v=20261117c';
-import { crearSync, claveSegura } from './sync.js?v=20261117c';
-import { vista as vistaReglasSRD } from './reglas.js?v=20261117c';
-import { tirarExpr, tirarD20, bonoNum, modDe, promedio, saludAprox } from './dados.js?v=20261117c';
+import { ATRIBUTOS, NOMBRE_ATRIBUTO, COLORES, CATEGORIAS, TIPOS_PRESENCIA, MOMENTOS, LUCES, CLIMAS, TEMPERATURAS, fichaVacia } from './datos.js?v=20261117d';
+import { crearSync, claveSegura } from './sync.js?v=20261117d';
+import { vista as vistaReglasSRD } from './reglas.js?v=20261117d';
+import { tirarExpr, tirarD20, bonoNum, modDe, promedio, saludAprox } from './dados.js?v=20261117d';
 
 /* ================= UTILIDADES ================= */
 const $ = (s, r = document) => r.querySelector(s);
@@ -298,6 +298,7 @@ function vistaMesa() {
     </div>
     <div class="columna">
       ${htmlIniciativa()}
+      ${htmlRegistro()}
       ${htmlAmbiente()}
       ${htmlRelojes()}
       ${htmlRevelado()}
@@ -381,6 +382,7 @@ function vistaHoja(id) {
         </div>
       </div>
     </section>
+    ${htmlCombateJugador(id)}
 
     <div class="columna">
       <section class="panel">
@@ -726,6 +728,7 @@ function dmCombate() {
     const fuera = [...listaPj().map(([id]) => [`pj:${id}`, F(id).nombre]), ...porOrden(E.presencias).map(([k, p]) => [`pr:${k}`, p.nombre])].filter(([v]) => !dentro.has(v));
     return `<section class="panel">
       <h2 class="panel-titulo">${icono('espadas')} Combate <span class="extra">Ronda ${c.ronda}</span></h2>
+      ${htmlAccionesDM()}
       <div class="fila" style="margin-bottom:12px"><button type="button" class="btn" data-accion="turno" data-d="-1">◀ Anterior</button><button type="button" class="btn btn-oro" data-accion="turno" data-d="1">Siguiente turno ▶</button></div>
       <ol class="orden dm">${lista.map(([pid, p]) => `<li class="${pid === c.turno ? 'actual' : ''}${derrotadoP(p) ? ' caido' : ''}" style="--c:${colorP(p)}">
         <label class="sr" for="cini-${pid}">Iniciativa de ${esc(nombreP(p))}</label><input class="campo num ini-in" id="cini-${pid}" type="number" inputmode="numeric" value="${esc(p.ini ?? '')}" data-cambio="ini" data-pid="${pid}">
@@ -926,6 +929,91 @@ function dmPersonajes() {
   </div>`;
 }
 
+/* ---------- Combate compartido: ataques de los jugadores, curaciones y registro ----------
+   combate/acciones/<id> = { ts, de (pj), objetivo (presencia), ataque, golpe, nat, dano, tipoDano, critico }: esperan al DM.
+   combate/registro/<id> = { ts, texto }: lo que pasó, sin números de vida; se ve en la mesa. Ambos se borran al terminar el combate. */
+const accionesPend = () => porOrden(C().acciones, (a) => a.ts);
+const registroCombate = () => porOrden(C().registro, (r) => r.ts);
+const tipoDeDano = (t) => String(t || '').replace(/\d*\s*[dD]\d+|[+\-−–]|\d+/g, ' ').replace(/\s+/g, ' ').trim();
+const nombreVisiblePr = (k) => { const p = presencia(k); return !p ? 'Alguien' : p.oculto ? 'Alguien oculto' : p.nombre; };
+function anotar(u, texto) {
+  if (!C().activo) return;
+  const l = registroCombate();
+  if (l.length >= 30) u[`combate/registro/${l[0][0]}`] = null;
+  u[`combate/registro/${nuevoId('r')}`] = { texto, ts: Date.now() };
+}
+
+function htmlRegistro() {
+  const l = registroCombate().slice(-6).reverse();
+  if (!C().activo || !l.length) return '';
+  return `<section class="panel"><h2 class="panel-titulo">Lo que pasó</h2><ul class="registro">${l.map(([, r], i) => `<li${i === 0 ? ' class="nuevo"' : ''}>${esc(r.texto)}</li>`).join('')}</ul></section>`;
+}
+
+function sugerencia(x, p) {
+  if (x.golpe === '' || x.golpe == null) return { clase: '', texto: 'Sin tirada para golpear: decide tú (¿una salvación?)' };
+  if (+x.nat === 20) return { clase: 'si', texto: '¡20 natural! Crítico: acierta' };
+  if (+x.nat === 1) return { clase: 'no', texto: '1 natural: falla' };
+  if (!p || p.ca === '' || p.ca == null) return { clase: '', texto: 'No tiene CA anotada: decide tú' };
+  return +x.golpe >= +p.ca ? { clase: 'si', texto: `Acierta (CA ${p.ca})` } : { clase: 'no', texto: `Falla (CA ${p.ca})` };
+}
+const textoAccion = (x) => `${(presencia(x.objetivo) || {}).nombre || '¿?'} · ${x.ataque}${x.golpe !== '' && x.golpe != null ? ` · ${x.golpe} para golpear` : ''}${x.dano !== '' && x.dano != null ? ` · ${x.dano} de daño` : ''}`;
+
+function htmlAccionesDM() {
+  const l = accionesPend(); if (!l.length) return '';
+  return `<div class="acciones-dm"><p class="sub" style="margin-top:0">Ataques de los jugadores</p>${l.map(([k, x]) => {
+    const p = presencia(x.objetivo); const s = sugerencia(x, p);
+    const golpe = x.golpe !== '' && x.golpe != null ? `${x.golpe} para golpear${x.nat ? ` (d20: ${x.nat})` : ''}` : 'sin tirada para golpear';
+    const dano = x.dano !== '' && x.dano != null ? `${x.dano} de daño${x.tipoDano ? ' ' + x.tipoDano : ''}${x.critico ? ' (crítico)' : ''}` : 'sin daño';
+    return `<div class="accion ${s.clase}" style="--c:${F(x.de).color || 'var(--oro)'}">
+      <div style="min-width:0;flex:1"><div><b>${esc(F(x.de).nombre || 'Jugador')}</b> → <b>${esc(p ? p.nombre : 'alguien que ya no está')}</b> · ${esc(x.ataque)}</div>
+        <div class="recurso-det">${esc(golpe)} · ${esc(dano)}${p && +p.pvMax > 0 ? ` · le quedan ${pvPr(p)} PV` : ''}</div>
+        <div class="accion-sug">${esc(s.texto)}</div></div>
+      <div class="fila accion-botones">${p ? `<label class="sr" for="ad-${esc(k)}">Daño a aplicar</label><input class="campo num campo-cant" id="ad-${esc(k)}" type="number" min="0" inputmode="numeric" data-borrador value="${val('ad-' + k, x.dano)}">
+        <button type="button" class="btn btn-peq btn-oro" data-accion="acc-aplicar" data-k="${esc(k)}" data-f="1">Acierta</button>
+        <button type="button" class="btn btn-peq" data-accion="acc-aplicar" data-k="${esc(k)}" data-f="0.5" title="Resistencia: la mitad del daño">Mitad</button>
+        <button type="button" class="btn btn-peq btn-peligro" data-accion="acc-fallo" data-k="${esc(k)}">Falla</button>` : `<button type="button" class="btn btn-peq" data-accion="acc-fallo" data-k="${esc(k)}">Descartar</button>`}</div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+// Panel de combate en la ficha del jugador
+function htmlCombateJugador(id) {
+  if (!C().activo) return '';
+  const f = F(id); const b = ui.borradores;
+  const objetivos = porOrden(E.presencias).filter(([, p]) => !p.oculto && !p.derrotado);
+  const ataques = (f.ataques || []).filter((a) => a && a.nombre);
+  const sel = b['ja-atq'] ?? (ataques.length ? '0' : 'otro');
+  const a = ataques[+sel] && sel !== 'otro' ? ataques[+sel] : null;
+  const bono = a ? bonoNum(a.bono) : null;
+  const conDano = a && tirarExpr(a.dano);
+  const modo = b['ja-modo'] || 'normal';
+  const mias = accionesPend().filter(([, x]) => x.de === id);
+  const compas = listaPj().filter(([oid]) => oid !== id && tienePv(oid));
+  return `<section class="panel ancho combate-jugador">
+    <h2 class="panel-titulo">${icono('espadas')} Atacar</h2>
+    ${objetivos.length ? `<div class="form-grid dos">
+      <div><label class="etq" for="ja-obj">A quién</label><select class="campo" id="ja-obj" data-borrador>${objetivos.map(([k, p]) => `<option value="${esc(k)}"${b['ja-obj'] === k ? ' selected' : ''}>${esc(p.nombre)}</option>`).join('')}</select></div>
+      <div><label class="etq" for="ja-atq">Con qué</label><select class="campo" id="ja-atq" data-borrador data-cambio="redibujar">${ataques.map((x, i) => `<option value="${i}"${sel === String(i) ? ' selected' : ''}>${esc(x.nombre)}${x.bono ? ` (${esc(x.bono)})` : ''}</option>`).join('')}<option value="otro"${sel === 'otro' ? ' selected' : ''}>Otro (conjuro, improvisado…)</option></select></div>
+      ${sel === 'otro' ? `<div style="grid-column:1/-1"><label class="etq" for="ja-otro">¿Qué usas?</label><input class="campo" style="width:100%" id="ja-otro" data-borrador placeholder="Ej. Rayo de escarcha" value="${val('ja-otro')}"></div>` : ''}
+      <div><label class="etq" for="ja-golpe">Tirada para golpear (total)</label>
+        <div class="fila" style="flex-wrap:nowrap;gap:6px"><input class="campo num" id="ja-golpe" type="number" inputmode="numeric" placeholder="—" data-borrador value="${val('ja-golpe')}">${bono != null ? `<button type="button" class="btn btn-peq" data-accion="ja-tirar-golpe">Tirar d20 ${bono >= 0 ? '+' : '−'}${Math.abs(bono)}</button>` : ''}</div>
+        ${bono != null ? `<div class="seg seg-peq" role="group" aria-label="Modo de la tirada" style="margin-top:6px">${[['normal', 'Normal'], ['ventaja', 'Ventaja'], ['desventaja', 'Desventaja']].map(([k, t]) => `<button type="button" aria-pressed="${modo === k}" data-accion="ja-modo" data-m="${k}">${t}</button>`).join('')}</div>` : ''}
+        <p class="ayuda" style="margin:4px 0 0">Déjala vacía si el enemigo hace una salvación.</p></div>
+      <div><label class="etq" for="ja-dano">Daño (total)</label>
+        <div class="fila" style="flex-wrap:nowrap;gap:6px"><input class="campo num" id="ja-dano" type="number" min="0" inputmode="numeric" placeholder="—" data-borrador value="${val('ja-dano')}">${conDano ? `<button type="button" class="btn btn-peq" data-accion="ja-tirar-dano" title="${esc(a.dano)}">Tirar daño</button>` : ''}</div>
+        <label class="check" style="margin-top:6px"><input type="checkbox" id="ja-crit" data-borrador-check${b['ja-crit'] ? ' checked' : ''}> ¡20 natural! Crítico (dobla los dados)</label></div>
+    </div>
+    ${b['ja-detalle'] ? `<p class="tenue num" style="margin:8px 0 0;font-size:14px">${esc(b['ja-detalle'])}</p>` : ''}
+    <div class="fila" style="margin-top:10px"><button type="button" class="btn btn-oro" data-accion="ja-enviar" data-id="${esc(id)}">Enviar al DM</button></div>`
+    : '<p class="tenue" style="margin:0">No hay enemigos a la vista.</p>'}
+    ${mias.length ? `<p class="sub" style="margin-top:12px">Esperando al DM</p><ul class="lista inv">${mias.map(([k, x]) => `<li><span>${esc(textoAccion(x))}</span><button type="button" data-accion="ja-cancelar" data-k="${esc(k)}" data-id="${esc(id)}" aria-label="Cancelar">×</button></li>`).join('')}</ul>` : ''}
+    ${compas.length ? `<details class="pl-perfil" data-abrir="cura"${ui.abiertos.has('cura') ? ' open' : ''}><summary>Curar a un compañero</summary>
+      <div class="fila" style="margin-top:8px;flex-wrap:nowrap;gap:6px"><label class="sr" for="ja-cura-obj">A quién</label><select class="campo" id="ja-cura-obj" data-borrador style="flex:1;min-width:0">${compas.map(([oid]) => `<option value="${esc(oid)}"${b['ja-cura-obj'] === oid ? ' selected' : ''}>${esc(F(oid).nombre)}</option>`).join('')}</select>
+        <label class="sr" for="ja-cura-cant">Cuántos PV</label><input class="campo num campo-cant" id="ja-cura-cant" type="number" min="1" inputmode="numeric" placeholder="PV" data-borrador data-enter="ja-curar" data-id="${esc(id)}" value="${val('ja-cura-cant')}">
+        <button type="button" class="btn btn-peq btn-bien" data-accion="ja-curar" data-id="${esc(id)}">Curar</button></div></details>` : ''}
+  </section>`;
+}
+
 /* ---------- Banco de PNJ ---------- */
 // Borradores del banco que se conservan al limpiar el formulario
 const PL_PERSISTE = ['pl-buscar', 'pl-opt-oculto', 'pl-opt-tirarpv', 'pl-opt-combate', 'pl-rapido', 'pl-rapido-cant'];
@@ -1085,7 +1173,7 @@ function dmTiradas() {
     <p class="tenue" style="margin:0 0 8px;font-size:14px">Solo se ven en este dispositivo. La ventaja o desventaja se aplica a los ataques de los PNJ.</p>
     <div class="seg seg-peq" role="group" aria-label="Modo de los ataques">${modos.map(([k, t]) => `<button type="button" aria-pressed="${ui.modoTirada === k}" data-accion="modo-tirada" data-m="${k}">${t}</button>`).join('')}</div>
     <div class="agregar"><label class="sr" for="tl-expr">Tirada libre</label><input id="tl-expr" placeholder="Tirada libre, ej. 2d6 + 3 o d20" data-borrador data-enter="tirada-libre" value="${val('tl-expr')}"><button type="button" class="btn btn-peq" data-accion="tirada-libre">Tirar</button></div>
-    ${ui.tiradas.length ? `<ul class="tiradas">${ui.tiradas.map((x) => `<li class="${esc(x.clase || '')}"><div><b>${esc(x.texto)}</b><small>${esc(x.detalle || '')}</small></div><span class="tenue num">${hora(x.ts)}</span></li>`).join('')}</ul><div class="fila" style="margin-top:8px"><button type="button" class="btn btn-peq" data-accion="tiradas-limpiar">Limpiar</button></div>` : ''}
+    ${ui.tiradas.length ? `<ul class="tiradas">${ui.tiradas.map((x) => `<li class="${esc(x.clase || '')}"><div style="min-width:0;flex:1"><b>${esc(x.texto)}</b><small>${esc(x.detalle || '')}</small>${x.aplicar ? (x.aplicado ? `<small class="aplicado">Aplicado a ${esc(x.aplicado)}</small>` : listaPj().some(([id]) => tienePv(id)) ? `<div class="fila aplicar"><label class="sr" for="ap-${x.id}">Aplicar a</label><select class="campo campo-peq" id="ap-${x.id}" data-borrador style="margin:0">${listaPj().filter(([id]) => tienePv(id)).map(([id]) => `<option value="${esc(id)}"${ui.borradores['ap-' + x.id] === id ? ' selected' : ''}>${esc(F(id).nombre)}</option>`).join('')}</select><button type="button" class="btn btn-peq btn-peligro" data-accion="tir-aplicar" data-t="${x.id}" data-f="1">Aplicar</button><button type="button" class="btn btn-peq" data-accion="tir-aplicar" data-t="${x.id}" data-f="0.5">Mitad</button></div>` : '') : ''}</div><span class="tenue num">${hora(x.ts)}</span></li>`).join('')}</ul><div class="fila" style="margin-top:8px"><button type="button" class="btn btn-peq" data-accion="tiradas-limpiar">Limpiar</button></div>` : ''}
   </section>`;
 }
 
@@ -1274,6 +1362,13 @@ function render() {
   montarMapa();
   const t = turnoDe();
   const clave = t ? `${C().ronda}:${C().turno}` : null;
+  // Aviso al DM cuando llega un ataque nuevo de un jugador
+  const pend = accionesPend().map(([k]) => k);
+  if (ui.accionesVistas && esDM() && !ui.tv) {
+    const nueva = pend.find((k) => !ui.accionesVistas.has(k));
+    if (nueva) { const x = C().acciones[nueva]; aviso(`${F(x.de).nombre || 'Un jugador'} ataca a ${(presencia(x.objetivo) || {}).nombre || '¿?'}: revisa DM → Mesa`); try { navigator.vibrate && navigator.vibrate(120); } catch (e) { /* sin vibración */ } }
+  }
+  ui.accionesVistas = new Set(pend);
   if (clave !== ui.ultimoTurno) {
     if (ui.ultimoTurno !== 'inicio' && t && t.tipo === 'pj' && t.ref === ui.yo) { try { navigator.vibrate && navigator.vibrate([180, 80, 180]); } catch (e) { /* sin vibración */ } }
     ui.ultimoTurno = clave;
@@ -1609,7 +1704,7 @@ const ACCIONES = {
     delete ui.borradores['pr-nombre']; aviso(`${nombre} está en escena`);
   },
   'pr-dano'(d) { const p = E.presencias[d.k]; sync.escribir({ [`presencias/${d.k}/dano`]: Math.max(0, (p.dano || 0) + +d.d) }); },
-  'pr-derrotado'(d) { const p = E.presencias[d.k]; sync.escribir({ [`presencias/${d.k}/derrotado`]: !p.derrotado }); },
+  'pr-derrotado'(d) { const p = E.presencias[d.k]; const u = { [`presencias/${d.k}/derrotado`]: !p.derrotado }; if (!p.derrotado && !p.oculto) anotar(u, `${p.nombre} cae`); sync.escribir(u); },
   'pr-estado'(d) { const el = $('#pr-est-' + d.k); const t = ((el && el.value) || '').trim(); if (!t) { aviso('Escribe el estado'); return; } delete ui.borradores['pr-est-' + d.k]; sync.escribir({ [`presencias/${d.k}/estados/${claveSegura(t)}`]: true }); },
   'pr-estado-quitar'(d) { sync.escribir({ [`presencias/${d.k}/estados/${claveSegura(d.e)}`]: null }); },
   'pr-quitar'(d) {
@@ -1821,7 +1916,7 @@ const ACCIONES = {
     const dano = d.tipo === 'cura' ? Math.max(0, (+p.dano || 0) - n) : Math.min(+p.pvMax, (+p.dano || 0) + n);
     const u = { [`presencias/${d.k}/dano`]: dano };
     const despues = Math.max(0, +p.pvMax - dano);
-    if (despues <= 0 && !p.derrotado) u[`presencias/${d.k}/derrotado`] = true;
+    if (despues <= 0 && !p.derrotado) { u[`presencias/${d.k}/derrotado`] = true; if (!p.oculto) anotar(u, `${p.nombre} cae`); }
     if (despues > 0 && p.derrotado && d.tipo === 'cura') u[`presencias/${d.k}/derrotado`] = false;
     delete ui.borradores['pr-cant-' + d.k];
     sync.escribir(u);
@@ -1839,8 +1934,8 @@ const ACCIONES = {
   'pr-dano-tirar'(d) {
     const p = presencia(d.k); const a = p && (p.ataques || [])[+d.i]; if (!a) return;
     const crit = !!d.crit; const r = tirarExpr(a.dano, crit); if (!r) { aviso('Ese daño no tiene dados'); return; }
-    const tipoDano = String(a.dano).replace(/\d*\s*[dD]\d+|[+\-−–]|\d+/g, ' ').replace(/\s+/g, ' ').trim(); // solo quita dados y números: «contundente» queda entero
-    registrar(`${p.nombre} · ${a.nombre}: ${r.total} de daño${tipoDano ? ' ' + tipoDano : ''}${crit ? ' (crítico)' : ''}`, r.detalle, crit ? 'critico' : '');
+    const tipoDano = tipoDeDano(a.dano);
+    registrar(`${p.nombre} · ${a.nombre}: ${r.total} de daño${tipoDano ? ' ' + tipoDano : ''}${crit ? ' (crítico)' : ''}`, r.detalle, crit ? 'critico' : '', { total: r.total, k: d.k });
   },
   'modo-tirada'(d) { ui.modoTirada = d.m; },
   'tirada-libre'() {
@@ -1860,6 +1955,87 @@ const ACCIONES = {
     if (hechas.length) registrar('Iniciativa de los PNJ', hechas.join(' · '));
   },
 
+  /* combate compartido */
+  'ja-modo'(d) { ui.borradores['ja-modo'] = d.m; },
+  'ja-tirar-golpe'() {
+    const b = ui.borradores; const f = F(ui.ver); const sel = b['ja-atq'] ?? '0';
+    const a = (f.ataques || []).filter((x) => x && x.nombre)[+sel]; const bono = a ? bonoNum(a.bono) : null; if (bono == null) return;
+    const modo = b['ja-modo'] || 'normal'; const r = tirarD20(modo); const total = r.nat + bono;
+    b['ja-golpe'] = String(total); b['ja-nat'] = r.nat;
+    if (r.nat === 20) b['ja-crit'] = true; else if (b['ja-crit']) delete b['ja-crit'];
+    b['ja-detalle'] = `d20 ${r.dados.length > 1 ? `[${r.dados.join(', ')}] con ${modo}` : `[${r.nat}]`} ${bono >= 0 ? '+' : '−'} ${Math.abs(bono)} = ${total}${r.nat === 20 ? ' · ¡Crítico!' : r.nat === 1 ? ' · 1 natural' : ''}`;
+    aviso(`Para golpear: ${total}${r.nat === 20 ? ' ¡Crítico!' : ''}`);
+  },
+  'ja-tirar-dano'() {
+    const b = ui.borradores; const f = F(ui.ver); const sel = b['ja-atq'] ?? '0';
+    const a = (f.ataques || []).filter((x) => x && x.nombre)[+sel]; if (!a) return;
+    const crit = !!(($('#ja-crit') || {}).checked); const r = tirarExpr(a.dano, crit); if (!r) return;
+    b['ja-dano'] = String(r.total);
+    b['ja-detalle'] = `${b['ja-detalle'] ? b['ja-detalle'] + ' · ' : ''}Daño ${r.detalle} = ${r.total}${crit ? ' (crítico)' : ''}`;
+    aviso(`Daño: ${r.total}`);
+  },
+  'ja-enviar'(d) {
+    const b = ui.borradores; const f = F(d.id);
+    const objetivo = ($('#ja-obj') || {}).value || '';
+    if (!presencia(objetivo)) { aviso('Elige a quién atacas'); return; }
+    const sel = ($('#ja-atq') || {}).value || 'otro';
+    const a = sel === 'otro' ? null : (f.ataques || []).filter((x) => x && x.nombre)[+sel];
+    const nombreAtq = a ? a.nombre : (($('#ja-otro') || {}).value || '').trim() || 'Ataque';
+    const golpe = parseInt(($('#ja-golpe') || {}).value, 10); const dano = parseInt(($('#ja-dano') || {}).value, 10);
+    if (!Number.isFinite(golpe) && !Number.isFinite(dano)) { aviso('Escribe tu tirada para golpear o el daño'); $('#ja-golpe').focus(); return; }
+    const critico = !!(($('#ja-crit') || {}).checked);
+    const nat = b['ja-nat'] ? +b['ja-nat'] : critico ? 20 : '';
+    sync.escribir({ [`combate/acciones/${nuevoId('a')}`]: { ts: Date.now(), de: d.id, objetivo, ataque: nombreAtq, golpe: Number.isFinite(golpe) ? golpe : '', nat, dano: Number.isFinite(dano) ? dano : '', tipoDano: a ? tipoDeDano(a.dano) : '', critico } });
+    for (const k of ['ja-golpe', 'ja-dano', 'ja-crit', 'ja-nat', 'ja-detalle', 'ja-otro']) delete b[k];
+    aviso('Enviado al DM');
+  },
+  'ja-cancelar'(d) { const x = (C().acciones || {})[d.k]; if (x && x.de === d.id) sync.escribir({ [`combate/acciones/${d.k}`]: null }); },
+  'ja-curar'(d) {
+    const obj = ($('#ja-cura-obj') || {}).value; const n = parseInt(($('#ja-cura-cant') || {}).value, 10);
+    if (!obj || !tienePv(obj)) { aviso('Elige a quién curas'); return; }
+    if (!n || n < 0) { aviso('Escribe cuántos PV'); $('#ja-cura-cant').focus(); return; }
+    const antes = pvDe(obj); const v = Math.min(+F(obj).pvMax, antes + n);
+    const u = { [`personajes/${obj}/estado/pv`]: v };
+    anotar(u, `${F(d.id).nombre} cura a ${F(obj).nombre}`);
+    delete ui.borradores['ja-cura-cant'];
+    sync.escribir(u); aviso(`${F(obj).nombre}: +${v - antes} PV`);
+  },
+  'acc-aplicar'(d) {
+    const x = (C().acciones || {})[d.k]; if (!x) return;
+    const p = presencia(x.objetivo); const quien = F(x.de).nombre || 'Alguien';
+    const u = { [`combate/acciones/${d.k}`]: null };
+    if (!p) { sync.escribir(u); return; }
+    const base = parseInt(($('#ad-' + d.k) || {}).value, 10);
+    const n = Math.floor((Number.isFinite(base) ? base : 0) * +d.f);
+    const dano = +p.pvMax > 0 ? Math.min(+p.pvMax, (+p.dano || 0) + n) : (+p.dano || 0) + n;
+    u[`presencias/${x.objetivo}/dano`] = dano;
+    const cae = +p.pvMax > 0 && +p.pvMax - dano <= 0;
+    if (cae) u[`presencias/${x.objetivo}/derrotado`] = true;
+    anotar(u, `${quien} golpea a ${p.nombre}${x.critico ? ' con un crítico' : ''}${cae ? ` y ${p.nombre} cae` : ''}`);
+    delete ui.borradores['ad-' + d.k];
+    sync.escribir(u);
+    aviso(cae ? `${p.nombre} cae` : +p.pvMax > 0 ? `${p.nombre}: −${n} PV → ${Math.max(0, +p.pvMax - dano)}/${p.pvMax}` : `${p.nombre}: +${n} de daño`);
+  },
+  'acc-fallo'(d) {
+    const x = (C().acciones || {})[d.k]; if (!x) return;
+    const p = presencia(x.objetivo);
+    const u = { [`combate/acciones/${d.k}`]: null };
+    if (p) anotar(u, `${F(x.de).nombre || 'Alguien'} falla contra ${p.nombre}`);
+    delete ui.borradores['ad-' + d.k];
+    sync.escribir(u);
+  },
+  'tir-aplicar'(d) {
+    const x = ui.tiradas.find((t) => t.id === d.t); if (!x || !x.aplicar) return;
+    const pj = ($('#ap-' + d.t) || {}).value; if (!pj || !tienePv(pj)) { aviso('Elige a qué personaje'); return; }
+    const n = Math.floor(x.aplicar.total * +d.f);
+    const antes = pvDe(pj); const v = Math.max(0, antes - n);
+    const u = { [`personajes/${pj}/estado/pv`]: v };
+    anotar(u, `${nombreVisiblePr(x.aplicar.k)} golpea a ${F(pj).nombre}${v <= 0 ? ` y ${F(pj).nombre} cae inconsciente` : ''}`);
+    sync.escribir(u);
+    x.aplicado = `${F(pj).nombre} (−${n})`;
+    const conc = S(pj).concentra;
+    aviso(`${F(pj).nombre}: −${n} PV → ${v}/${F(pj).pvMax}${conc && n > 0 ? ` · salvación de CON CD ${Math.max(10, Math.floor(n / 2))} para mantener ${conc}` : ''}`);
+  },
   /* DM: ajustes */
   'aj-guardar'() {
     sync.escribir({ 'campana/nombre': ($('#aj-nombre').value || '').trim() || 'Mi campaña', 'campana/capitulo': ($('#aj-cap').value || '').trim() });
@@ -2005,8 +2181,8 @@ function exportarFichas() {
 }
 
 /* ---------- Banco de PNJ: tiradas, copias, importar y exportar ---------- */
-function registrar(texto, detalle = '', clase = '') {
-  ui.tiradas.unshift({ texto, detalle, clase, ts: Date.now() });
+function registrar(texto, detalle = '', clase = '', aplicar = null) {
+  ui.tiradas.unshift({ id: nuevoId('t'), texto, detalle, clase, ts: Date.now(), aplicar });
   ui.tiradas = ui.tiradas.slice(0, 12);
   aviso(texto);
 }
@@ -2086,6 +2262,7 @@ async function importarBanco(file) {
 
 const CAMBIOS = {
   'ent-cat'() { render(); },
+  redibujar() { render(); },
   ini(t) { const v = parseInt(t.value, 10); sync.escribir({ [`combate/participantes/${t.dataset.pid}/ini`]: Number.isFinite(v) ? v : '' }); },
   'ent-grupo-form'(t) { ui.borradores['ent-grupo'] = t.value; render(); if (t.value === '__nuevo') { const el = $('#ent-grupo-nuevo'); if (el) el.focus(); } },
   'ent-grupo'(t) { sync.escribir({ [`enciclopedia/${t.dataset.cat}/${t.dataset.id}/grupo`]: t.value || null }); },
@@ -2112,6 +2289,7 @@ document.addEventListener('click', (ev) => {
 document.addEventListener('input', (ev) => {
   const t = ev.target;
   if (t.dataset && 'borrador' in t.dataset && t.id) ui.borradores[t.id] = t.value;
+  if (t.id === 'ja-golpe') { delete ui.borradores['ja-nat']; delete ui.borradores['ja-detalle']; }
   if (t.dataset && 'filtro' in t.dataset) { clearTimeout(render.f); render.f = setTimeout(render, 160); }
   if (t.dataset && t.dataset.buscar) { ui.reglas[t.dataset.buscar].q = t.value; clearTimeout(render.t); render.t = setTimeout(render, 140); }
   if (t.dataset && t.dataset.notas) { clearTimeout(guardarNotas.t); guardarNotas.t = setTimeout(() => guardarNotas(t.dataset.notas, t.value), 700); }

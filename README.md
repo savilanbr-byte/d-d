@@ -26,6 +26,13 @@ Dirección de la app: https://savilanbr-byte.github.io/d-d/
 | **DM → Reglas** | Las reglas del DM del SRD 5.2.1 (herramientas del juego, objetos mágicos, monstruos y animales). Su buscador encuentra también las reglas de jugador. |
 | **DM → Ajustes** | Nombre de la campaña, PIN del DM, PINs de los personajes y borrar la campaña. |
 
+## Combate compartido
+
+- **Jugadores:** durante un combate, su ficha muestra el panel **Atacar**. Eligen a quién y con qué ataque, escriben el total de sus dados físicos o pulsan **Tirar d20** y **Tirar daño** (normal, ventaja o desventaja; un 20 natural marca crítico y dobla los dados), y lo **envían al DM**. Pueden cancelar lo que aún no se revisa. También pueden **curar a un compañero**.
+- **DM:** los ataques llegan arriba del panel de combate (con aviso en pantalla) y la app sugiere si acierta según la CA del enemigo. **Acierta** resta el daño (se puede corregir antes), **Mitad** es para resistencias, **Falla** lo descarta. A 0 PV el enemigo queda derrotado.
+- **Daño de los PNJ:** después de tirar el daño de un enemigo en **Tiradas del DM**, se elige el personaje y **Aplicar** (o **Mitad**) le resta los PV. Si estaba concentrado, el aviso recuerda la salvación de CON.
+- **Mesa:** el panel **Lo que pasó** muestra las últimas acciones («Laila golpea a Bandido 1», «Bandido 1 cae»), sin números de vida. Se borra al terminar el combate.
+
 ## Creador de personajes: formato de las listas
 
 | Lista | Una línea por elemento |
