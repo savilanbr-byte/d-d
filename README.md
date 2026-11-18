@@ -35,6 +35,14 @@ Dirección de la app: https://savilanbr-byte.github.io/d-d/
 - **Pasar al inventario** convierte el «Equipo base» de la ficha en objetos y reconoce las armas y armaduras del SRD.
 - Cada ataque tiene **Atacar**, **Daño** y **Crít.**; en combate, lo que se tira queda listo en el panel **Atacar** para enviárselo al DM.
 
+## Libro de conjuros
+
+- **El DM da los conjuros:** en la ficha de cada personaje, **Libro de conjuros → Dar un conjuro** abre el catálogo del SRD 5.2.1 (339 conjuros, `reglas/conjuros.json`), con buscador, filtro por nivel y por clase. También se pueden crear **conjuros propios** del mundo, **ajustar** la tirada o el daño que la app sacó del texto, **quitar** conjuros y **pasar al libro** los que estaban escritos a mano en la ficha.
+- **El jugador los lanza:** cada conjuro muestra tiempo, alcance, duración y descripción. **Lanzar** gasta el espacio elegido, marca la concentración (y avisa si reemplaza otra) y tira el daño o la curación. Los trucos suben de daño con el nivel del personaje y los conjuros con espacios más altos suman sus dados extra.
+- **En combate:** los conjuros contra enemigos aparecen en el panel **Atacar**. Los de ataque se resuelven como un arma (contra la CA). Los de salvación permiten marcar varios objetivos; al DM le llega uno por objetivo con **Tirar su salvación** (usa el atributo de la plantilla del PNJ), **Todo el daño**, **Mitad** o **Sin daño**. El espacio se gasta al enviarlo. Las curaciones llenan el panel **Curar a un compañero**.
+- La CD y el ataque de conjuro salen de «Editar ficha» (si falta uno, se calcula con el otro).
+- Para regenerar el catálogo: `python3 herramientas/extraer_conjuros.py reglas/reglas-jugador.json reglas/conjuros.json`.
+
 ## Combate compartido
 
 - **Jugadores:** durante un combate, su ficha muestra el panel **Atacar**. Eligen a quién y con qué ataque, escriben el total de sus dados físicos o pulsan **Tirar d20** y **Tirar daño** (normal, ventaja o desventaja; un 20 natural marca crítico y dobla los dados), y lo **envían al DM**. Pueden cancelar lo que aún no se revisa. También pueden **curar a un compañero**.
@@ -128,6 +136,8 @@ En **DM → Banco PNJ → Importar** se carga un archivo `.json` con este format
 | `js/datos.js` | Listas fijas y la campaña vacía |
 | `js/sync.js` | Sincronización en vivo (Firebase) o de demostración |
 | `js/app.js` | Vistas, creador de personajes y panel del DM |
+| `reglas/conjuros.json` | Los 339 conjuros del SRD 5.2.1 para el libro de conjuros (se carga solo al dar conjuros) |
+| `herramientas/extraer_conjuros.py` | Saca los conjuros de `reglas/reglas-jugador.json` |
 | `js/equipo.js` | Armas y armaduras del SRD 5.2.1 y competencias por clase |
 | `js/dados.js` | Tiradas de dados y salud aproximada de los PNJ |
 | `js/reglas.js` | Lector de reglas: índice, buscador y dibujo de tablas y perfiles |

@@ -692,3 +692,16 @@ body.tv .registro li { font-size: 19px; }
 @media (max-width: 420px) { .monedas { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .moneda-etq { font-family: var(--f-etiqueta); font-size: 12px; letter-spacing: .04em; color: var(--tenue); }
 .moneda-val { display: block; text-align: center; padding: 6px 4px; font-size: 16px; }
+
+/* ---------- Libro de conjuros ---------- */
+.conj { padding: 10px 0; border-top: 1px solid var(--linea-suave); }
+.libro .sub + .conj { border-top: 0; padding-top: 4px; }
+.conj-cab b { color: var(--oro-claro); font-weight: 600; }
+.conj-cab small { display: block; font-size: 13px; color: var(--tenue); }
+.conj-acc { gap: 6px; margin-top: 6px; }
+.conj-acc select { flex: 0 1 auto; }
+.conj-texto { margin: 4px 0 0; font-size: 15px; color: var(--texto); }
+.dar-conj { margin-top: 14px; border-top: 1px solid var(--linea-suave); padding-top: 10px; }
+.dar-lista { margin-top: 8px; max-height: 420px; overflow: auto; }
+.dar-lista li { align-items: center; }
+.multi-obj { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 12px; margin-top: 4px; }

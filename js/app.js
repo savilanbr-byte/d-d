@@ -1,8 +1,8 @@
-import { ATRIBUTOS, NOMBRE_ATRIBUTO, COLORES, CATEGORIAS, TIPOS_PRESENCIA, MOMENTOS, LUCES, CLIMAS, TEMPERATURAS, fichaVacia } from './datos.js?v=20261118b';
-import { crearSync, claveSegura } from './sync.js?v=20261118b';
-import { vista as vistaReglasSRD } from './reglas.js?v=20261118b';
-import { tirarExpr, tirarD20, bonoNum, modDe, promedio, saludAprox } from './dados.js?v=20261118b';
-import { ARMAS, ARMADURAS, MONEDAS, competenteCon } from './equipo.js?v=20261118b';
+import { ATRIBUTOS, NOMBRE_ATRIBUTO, COLORES, CATEGORIAS, TIPOS_PRESENCIA, MOMENTOS, LUCES, CLIMAS, TEMPERATURAS, fichaVacia } from './datos.js?v=20261118c';
+import { crearSync, claveSegura } from './sync.js?v=20261118c';
+import { vista as vistaReglasSRD } from './reglas.js?v=20261118c';
+import { tirarExpr, tirarD20, bonoNum, modDe, promedio, saludAprox } from './dados.js?v=20261118c';
+import { ARMAS, ARMADURAS, MONEDAS, competenteCon } from './equipo.js?v=20261118c';
 
 /* ================= UTILIDADES ================= */
 const $ = (s, r = document) => r.querySelector(s);
@@ -389,7 +389,7 @@ function desequiparIncompatibles(id, o, excepto) {
   return u;
 }
 // Ataques de un personaje: los de sus armas equipadas y los que escribió a mano en la ficha
-const ataquesPj = (id) => [...objetosDe(id).filter(([, o]) => o.equipado && o.clase === 'arma').flatMap(([, o]) => ataquesDeArma(id, o)), ...(F(id).ataques || []).filter((a) => a && a.nombre)];
+const ataquesPj = (id, conConjuros = false) => [...objetosDe(id).filter(([, o]) => o.equipado && o.clase === 'arma').flatMap(([, o]) => ataquesDeArma(id, o)), ...(F(id).ataques || []).filter((a) => a && a.nombre), ...(conConjuros ? conjurosDeCombate(id) : [])];
 
 // CA: si hay armadura, escudo u objetos de CA equipados se calcula; si no, la que se escribió en la ficha
 function caDe(id) {
@@ -469,16 +469,152 @@ function htmlInventario(id) {
 
 // Lista de ataques con botones (ficha y panel Atacar)
 function htmlListaAtaques(id, enPanel) {
-  const lista = ataquesPj(id); const b = ui.borradores;
+  const lista = ataquesPj(id, enPanel); const b = ui.borradores;
   const sel = b['ja-atq'] ?? (lista.length ? '0' : 'otro');
   return `<div class="atq-lista">${lista.map((a, i) => {
     const bono = bonoNum(a.bono); const conDado = !!tirarExpr(a.dano);
     return `<div class="atq${enPanel && sel === String(i) ? ' elegido' : ''}">
       <span style="min-width:0;flex:1">${enPanel ? `<button type="button" class="atq-nombre atq-elegir" data-accion="ja-elegir" data-i="${i}" aria-pressed="${sel === String(i)}">${esc(a.nombre)}</button>` : `<span class="atq-nombre">${esc(a.nombre)}</span>`}
-        <small class="atq-det">${esc([a.bono, a.dano].filter(Boolean).join(' · '))}${a.nota ? ` · ${esc(a.nota)}` : ''}</small></span>
+        <small class="atq-det">${a.conjuro ? '✦ ' : ''}${esc([a.bono, a.salva ? `CD ${a.salva.cd} ${a.salva.attr}${a.salva.mitad ? ' (mitad si supera)' : ''}` : '', a.dano].filter(Boolean).join(' · '))}${a.nota ? ` · ${esc(a.nota)}` : ''}</small>
+        ${enPanel && sel === String(i) && a.conjuro && a.nivel ? (() => { const libres = Array.from({ length: 10 - a.nivel }, (_, k) => a.nivel + k).filter((k) => +((F(id).espacios || {})['n' + k] || 0) > 0); return libres.length ? `<span class="fila" style="gap:6px;margin-top:4px"><label class="etq" for="jlz-${esc(a.conjuro)}" style="margin:0">Espacio</label><select class="campo campo-peq" id="jlz-${esc(a.conjuro)}" data-cambio="nivel-conj" data-c="${esc(a.conjuro)}" style="margin:0">${libres.map((k) => `<option value="${k}"${k === a.nivelEsp ? ' selected' : ''}>Nivel ${k} (${espDe(id, k)} libre${espDe(id, k) === 1 ? '' : 's'})</option>`).join('')}</select></span>` : '<span class="chip malo" style="margin-top:4px">Sin espacios</span>'; })() : ''}</span>
       <span class="fila" style="gap:6px;flex:none">${bono != null ? `<button type="button" class="btn btn-peq" data-accion="ja-tirar-golpe" data-i="${i}" data-id="${esc(id)}">Atacar ${conSigno(bono)}</button>` : ''}${conDado ? `<button type="button" class="btn btn-peq" data-accion="ja-tirar-dano" data-i="${i}" data-id="${esc(id)}" title="${esc(a.dano)}">Daño</button><button type="button" class="btn btn-peq" data-accion="ja-tirar-dano" data-i="${i}" data-id="${esc(id)}" data-crit="1" title="Crítico: dobla los dados">Crít.</button>` : ''}</span>
     </div>`;
   }).join('')}${enPanel ? `<div class="atq${sel === 'otro' ? ' elegido' : ''}"><button type="button" class="atq-nombre atq-elegir" data-accion="ja-elegir" data-i="otro" aria-pressed="${sel === 'otro'}">Otro (conjuro, improvisado…)</button></div>` : ''}</div>`;
+}
+
+/* ---------- Libro de conjuros ----------
+   estado/libro/<id> = copia del conjuro (SRD o propio): { nombre, nivel, escuela, ritual, tiempo, alcance, componentes, duracion, conc,
+   texto, mejora, tirada (ataque|salvacion|''), salva (FUE…CAR), dano, tipo, cura, sumaMod, masNivel, mitad, propio, orden }.
+   Solo el DM da, ajusta o quita conjuros; el jugador los lanza. El catálogo del SRD (reglas/conjuros.json) se carga al abrir «Dar un conjuro». */
+const libroDe = (id) => Object.entries(S(id).libro || {}).filter(([, c]) => c && c.nombre).sort((a, b) => (a[1].nivel - b[1].nivel) || a[1].nombre.localeCompare(b[1].nombre, 'es'));
+const cdMagia = (id) => { const cd = modDe(F(id).cd); if (cd) return cd; const a = bonoNum(F(id).ataqueConjuro); return a != null ? a + 8 : null; };
+const ataqueMagia = (id) => { const a = bonoNum(F(id).ataqueConjuro); if (a != null) return a; const cd = modDe(F(id).cd); return cd ? cd - 8 : null; };
+const modMagia = (id) => { const cd = cdMagia(id); return cd ? cd - 8 - compDe(id) : 0; };
+const NOMBRE_SALVA = { FUE: 'Fuerza', DES: 'Destreza', CON: 'Constitución', INT: 'Inteligencia', SAB: 'Sabiduría', CAR: 'Carisma' };
+// Nivel de espacio elegido para un conjuro: el que se marcó, o el más bajo con espacios libres
+function nivelConj(id, cid, c) {
+  if (!c || !c.nivel) return 0;
+  const elegido = +ui.borradores['lz-' + cid];
+  if (elegido >= c.nivel) return elegido;
+  for (let n = c.nivel; n <= 9; n++) if (espDe(id, n) > 0) return n;
+  return c.nivel;
+}
+// Expresión de daño o curación del conjuro al nivel indicado (trucos según el nivel del personaje)
+function exprConj(id, c, nivelEsp) {
+  let base = String(c.dano || c.cura || '').trim(); if (!base) return '';
+  const m = base.match(/^(\d+)d(\d+)/);
+  if (m && c.nivel === 0 && /aumenta/i.test(c.mejora || '')) { const lv = +F(id).nivel || 1; const t = lv >= 17 ? 4 : lv >= 11 ? 3 : lv >= 5 ? 2 : 1; base = base.replace(/^(\d+)d(\d+)/, `${+m[1] * t}d${m[2]}`); }
+  const extra = c.nivel > 0 ? Math.max(0, (nivelEsp || c.nivel) - c.nivel) : 0;
+  const mm = String(c.masNivel || '').match(/^(\d+)d(\d+)$/);
+  if (extra && mm) {
+    const m2 = base.match(/^(\d+)d(\d+)/);
+    if (m2 && m2[2] === mm[2]) base = base.replace(/^(\d+)d(\d+)/, `${+m2[1] + extra * +mm[1]}d${m2[2]}`);
+    else base += ` + ${extra * +mm[1]}d${mm[2]}`;
+  }
+  if (c.sumaMod) { const mg = modMagia(id); if (mg) base += ` ${mg > 0 ? '+' : '−'} ${Math.abs(mg)}`; }
+  return c.dano ? `${base} ${c.tipo || ''}`.trim() : base;
+}
+// Conjuros que sirven en el panel Atacar (con tirada de ataque, salvación o daño; las curaciones van aparte)
+const conjurosDeCombate = (id) => libroDe(id).filter(([, c]) => !c.cura && (c.tirada || c.dano)).map(([cid, c]) => {
+  const n = nivelConj(id, cid, c); const atq = ataqueMagia(id);
+  return { nombre: c.nombre, bono: c.tirada === 'ataque' && atq != null ? conSigno(atq) : '', dano: exprConj(id, c, n), conjuro: cid, nivel: c.nivel, nivelEsp: n, salva: c.tirada === 'salvacion' ? { attr: c.salva || 'DES', cd: cdMagia(id) ?? '', mitad: !!c.mitad } : null, nota: c.nivel ? `Nivel ${n}${c.conc ? ' · concentración' : ''}` : 'Truco' };
+});
+
+let catalogoConj = null; let cargandoConj = false;
+function cargarCatalogoConj() {
+  if (catalogoConj || cargandoConj) return;
+  cargandoConj = true;
+  fetch('reglas/conjuros.json?v=20261118c').then((r) => r.json()).then((d) => { catalogoConj = d.conjuros || []; }).catch(() => { aviso('No se pudo cargar el catálogo de conjuros'); }).finally(() => { cargandoConj = false; render(); });
+}
+const RAICES_CLASE = { bardo: 'bard', brujo: 'bruj', 'clérigo': 'cleri', druida: 'druid', explorador: 'explor', hechicero: 'hechicer', mago: 'mag', 'paladín': 'paladin' };
+const deSuClase = (f, c) => { const cl = norm(f.clase); return !!cl && (c.clases || []).some((k) => cl.includes(RAICES_CLASE[k] || norm(k))); };
+
+function htmlConjuro(id, cid, c, dm) {
+  const n = nivelConj(id, cid, c);
+  const libres = c.nivel ? Array.from({ length: 10 - c.nivel }, (_, i) => c.nivel + i).filter((k) => +((F(id).espacios || {})['n' + k] || 0) > 0) : [];
+  const atq = ataqueMagia(id); const cd = cdMagia(id); const expr = exprConj(id, c, n);
+  return `<div class="conj">
+    <div class="conj-cab"><b>${esc(c.nombre)}</b>${c.conc ? ' <span class="chip conc" title="Concentración">◈</span>' : ''}${c.ritual ? ' <span class="chip">Ritual</span>' : ''}${c.propio ? ' <span class="chip">Propio</span>' : ''}
+      <small>${esc([c.tiempo, c.alcance, c.duracion].filter(Boolean).join(' · '))}</small></div>
+    <div class="fila conj-acc">
+      ${c.nivel ? (libres.length ? `<label class="sr" for="lz-${esc(cid)}">Espacio para ${esc(c.nombre)}</label><select class="campo campo-peq" id="lz-${esc(cid)}" data-borrador data-cambio="redibujar" style="margin:0">${libres.map((k) => `<option value="${k}"${k === n ? ' selected' : ''}>Nivel ${k} (${espDe(id, k)} libre${espDe(id, k) === 1 ? '' : 's'})</option>`).join('')}</select>` : '<span class="chip malo">Sin espacios de su nivel</span>') : ''}
+      <button type="button" class="btn btn-peq btn-oro" data-accion="cj-lanzar" data-id="${esc(id)}" data-c="${esc(cid)}">Lanzar</button>
+      ${c.tirada === 'ataque' && atq != null ? `<button type="button" class="btn btn-peq" data-accion="cj-atacar" data-id="${esc(id)}" data-c="${esc(cid)}">Atacar ${conSigno(atq)}</button>` : ''}
+      ${c.tirada === 'salvacion' ? `<span class="chip" title="Salvación de ${esc(NOMBRE_SALVA[c.salva] || '')}">CD ${esc(cd ?? '?')} ${esc(c.salva || '')}</span>` : ''}
+      ${c.dano && expr ? `<button type="button" class="btn btn-peq" data-accion="cj-tirar" data-id="${esc(id)}" data-c="${esc(cid)}" title="${esc(expr)}">Daño ${esc(expr.replace(/\s+\D+$/, ''))}</button>` : ''}
+      ${c.cura && expr ? `<button type="button" class="btn btn-peq btn-bien" data-accion="cj-tirar" data-id="${esc(id)}" data-c="${esc(cid)}" title="${esc(expr)}">Curación ${esc(expr)}</button>` : ''}
+    </div>
+    <details class="pl-perfil" data-abrir="cj:${esc(cid)}"${ui.abiertos.has('cj:' + cid) ? ' open' : ''}><summary>Descripción</summary>
+      <p class="tenue" style="margin:6px 0 4px;font-size:14px">${esc([c.nivel ? `${c.escuela} de nivel ${c.nivel}` : `Truco de ${String(c.escuela || '').toLowerCase()}`, c.componentes].filter(Boolean).join(' · '))}</p>
+      <p class="pre conj-texto">${esc(c.texto || '')}</p>${c.mejora ? `<p class="conj-texto"><i>${esc(c.mejora)}</i></p>` : ''}
+      ${dm ? `<div class="lista-campo secreto" style="margin-top:8px"><span class="etq">Ajustar (solo el DM)</span><p class="ayuda">La app lo sacó del texto; corrígelo si hace falta.</p>
+        <div class="form-grid dos">
+          <div><label class="etq" for="cja-tir-${esc(cid)}">Tirada</label><select class="campo" id="cja-tir-${esc(cid)}">${[['', 'Ninguna'], ['ataque', 'Ataque de conjuro'], ['salvacion', 'Salvación del objetivo']].map(([k, t]) => `<option value="${k}"${(c.tirada || '') === k ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
+          <div><label class="etq" for="cja-sal-${esc(cid)}">Salvación de</label><select class="campo" id="cja-sal-${esc(cid)}">${ATRIBUTOS.map((a) => `<option value="${a}"${(c.salva || 'DES') === a ? ' selected' : ''}>${NOMBRE_SALVA[a]}</option>`).join('')}</select></div>
+          <div><label class="etq" for="cja-dano-${esc(cid)}">${c.cura ? 'Curación' : 'Daño'} (dados)</label><input class="campo" id="cja-dano-${esc(cid)}" value="${esc(c.dano || c.cura || '')}" placeholder="Ej. 8d6"></div>
+          <div><label class="etq" for="cja-tipo-${esc(cid)}">Tipo de daño</label><input class="campo" id="cja-tipo-${esc(cid)}" value="${esc(c.tipo || '')}" placeholder="Ej. fuego"></div>
+          <div><label class="etq" for="cja-mas-${esc(cid)}">Aumenta por nivel extra</label><input class="campo" id="cja-mas-${esc(cid)}" value="${esc(c.masNivel || '')}" placeholder="Ej. 1d6"></div>
+          <div style="align-self:end"><label class="check"><input type="checkbox" id="cja-mitad-${esc(cid)}"${c.mitad ? ' checked' : ''}> Mitad si supera la salvación</label><label class="check"><input type="checkbox" id="cja-mod-${esc(cid)}"${c.sumaMod ? ' checked' : ''}> Suma su modificador mágico</label></div>
+        </div>
+        <div class="fila" style="margin-top:8px"><button type="button" class="btn btn-peq btn-oro" data-accion="cj-ajustar" data-id="${esc(id)}" data-c="${esc(cid)}">Guardar ajustes</button>${botonConfirmar(`quitar-cj-${cid}`, 'Quitar del libro', 'cj-quitar', `data-id="${esc(id)}" data-c="${esc(cid)}"`, 'btn btn-peq btn-peligro')}</div>
+      </div>` : ''}
+    </details>
+  </div>`;
+}
+
+function htmlDarConjuro(id) {
+  const f = F(id); const b = ui.borradores;
+  if (!catalogoConj) cargarCatalogoConj();
+  const tiene = new Set(libroDe(id).map(([, c]) => norm(c.nombre)));
+  const q = norm(b['cj-q']); const niv = b['cj-niv'] ?? ''; const suClase = b['cj-suclase'] ?? !!f.clase;
+  const lista = (catalogoConj || []).filter((c) => (!q || norm(c.nombre).includes(q)) && (niv === '' || c.nivel === +niv) && (!suClase || deSuClase(f, c)));
+  const legado = [...(f.trucos || []), ...(f.conjuros || [])].filter((x) => x && x.nombre);
+  return `<details class="pl-perfil dar-conj" data-abrir="dar:${esc(id)}"${ui.abiertos.has('dar:' + id) ? ' open' : ''}><summary>Dar un conjuro</summary>
+    ${!catalogoConj ? '<p class="tenue" style="margin:8px 0 0">Cargando el catálogo del SRD…</p>' : `
+    <div class="form-grid dos" style="margin-top:8px">
+      <div><label class="sr" for="cj-q">Buscar conjuro</label><input class="campo" style="width:100%" id="cj-q" type="search" placeholder="Buscar por nombre" data-borrador data-filtro value="${val('cj-q')}"></div>
+      <div><label class="sr" for="cj-niv">Nivel</label><select class="campo" style="width:100%" id="cj-niv" data-borrador data-cambio="redibujar"><option value="">Todos los niveles</option>${Array.from({ length: 10 }, (_, k) => `<option value="${k}"${niv === String(k) ? ' selected' : ''}>${k ? `Nivel ${k}` : 'Trucos'}</option>`).join('')}</select></div>
+    </div>
+    ${f.clase ? `<label class="check" style="margin-top:6px"><input type="checkbox" id="cj-suclase" data-borrador-check data-cambio="redibujar"${suClase ? ' checked' : ''}> Solo los de su clase (${esc(f.clase)})</label>` : ''}
+    <ul class="lista dar-lista">${lista.slice(0, 40).map((c) => { const ya = tiene.has(norm(c.nombre)); return `<li><span style="min-width:0;flex:1"><b>${esc(c.nombre)}</b>${c.conc ? ' <span class="chip conc">◈</span>' : ''} <small class="tenue">${c.nivel ? `Nivel ${c.nivel}` : 'Truco'} · ${esc(c.escuela)} · ${esc(c.clases.join(', '))}</small></span>${ya ? '<span class="tenue" style="font-size:14px">Ya lo tiene</span>' : `<button type="button" class="btn btn-peq btn-oro" data-accion="cj-dar" data-id="${esc(id)}" data-n="${esc(c.nombre)}">Dar</button>`}</li>`; }).join('') || '<li class="tenue">Ningún conjuro coincide.</li>'}</ul>
+    ${lista.length > 40 ? `<p class="tenue" style="margin:4px 0 0;font-size:14px">Se muestran 40 de ${lista.length}. Escribe parte del nombre para encontrar el que buscas.</p>` : ''}
+    ${legado.length ? `<div class="fila" style="margin-top:10px"><button type="button" class="btn btn-peq" data-accion="cj-migrar" data-id="${esc(id)}">Pasar al libro los ${legado.length} anotados en la ficha</button></div>` : ''}`}
+    <details class="pl-perfil" data-abrir="propio:${esc(id)}"${ui.abiertos.has('propio:' + id) ? ' open' : ''}><summary>Conjuro propio (de tu mundo)</summary>
+      <div class="form-grid dos" style="margin-top:8px">
+        <div><label class="etq" for="cjp-nombre">Nombre</label><input class="campo" id="cjp-nombre" data-borrador value="${val('cjp-nombre')}"></div>
+        <div><label class="etq" for="cjp-nivel">Nivel (0 = truco)</label><input class="campo num" id="cjp-nivel" type="number" min="0" max="9" inputmode="numeric" data-borrador value="${val('cjp-nivel', '1')}"></div>
+        <div><label class="etq" for="cjp-tirada">Tirada</label><select class="campo" id="cjp-tirada" data-borrador>${[['', 'Ninguna'], ['ataque', 'Ataque de conjuro'], ['salvacion', 'Salvación del objetivo']].map(([k, t]) => `<option value="${k}"${(b['cjp-tirada'] || '') === k ? ' selected' : ''}>${t}</option>`).join('')}</select></div>
+        <div><label class="etq" for="cjp-salva">Salvación de</label><select class="campo" id="cjp-salva" data-borrador>${ATRIBUTOS.map((a) => `<option value="${a}"${(b['cjp-salva'] || 'DES') === a ? ' selected' : ''}>${NOMBRE_SALVA[a]}</option>`).join('')}</select></div>
+        <div><label class="etq" for="cjp-dano">Daño (dados)</label><input class="campo" id="cjp-dano" data-borrador placeholder="Ej. 3d6" value="${val('cjp-dano')}"></div>
+        <div><label class="etq" for="cjp-tipo">Tipo de daño</label><input class="campo" id="cjp-tipo" data-borrador placeholder="Ej. necrótico" value="${val('cjp-tipo')}"></div>
+        <div><label class="etq" for="cjp-meta">Tiempo · alcance · duración</label><input class="campo" id="cjp-meta" data-borrador placeholder="Acción · 18 m · Instantáneo" value="${val('cjp-meta')}"></div>
+        <div style="align-self:end"><label class="check"><input type="checkbox" id="cjp-conc" data-borrador-check${b['cjp-conc'] ? ' checked' : ''}> Concentración</label></div>
+        <div style="grid-column:1/-1"><label class="etq" for="cjp-texto">Descripción</label><textarea class="campo" id="cjp-texto" data-borrador style="min-height:70px">${val('cjp-texto')}</textarea></div>
+      </div>
+      <div class="fila" style="margin-top:8px"><button type="button" class="btn btn-peq btn-oro" data-accion="cj-propio" data-id="${esc(id)}">Dar este conjuro</button></div>
+    </details>
+  </details>`;
+}
+
+function htmlLibro(id) {
+  const f = F(id); const dm = esDM();
+  const libro = libroDe(id);
+  const legado = [...(f.trucos || []).map((c) => ({ ...c, nivel: 0 })), ...(f.conjuros || [])].filter((x) => x && x.nombre);
+  const lanzador = libro.length || legado.length || f.cd || f.ataqueConjuro || Object.keys(f.espacios || {}).length;
+  if (!lanzador && !dm) return '';
+  if (!lanzador && dm) return `<section class="panel"><h2 class="panel-titulo">Libro de conjuros</h2><p class="tenue" style="margin:0 0 6px;font-size:15px">Si este personaje usa magia, ponle su CD y su ataque de conjuro en «Editar ficha» y dale conjuros aquí.</p>${htmlDarConjuro(id)}</section>`;
+  const grupos = {};
+  for (const [cid, c] of libro) (grupos[c.nivel] = grupos[c.nivel] || []).push([cid, c]);
+  const atq = ataqueMagia(id); const cd = cdMagia(id);
+  return `<section class="panel libro">
+    <h2 class="panel-titulo">Libro de conjuros</h2>
+    <div class="fila" style="gap:8px;margin-bottom:6px">${cd != null ? `<span class="chip">CD ${cd}</span>` : ''}${atq != null ? `<span class="chip">Ataque ${conSigno(atq)}</span>` : ''}${S(id).concentra ? `<span class="chip conc">◈ ${esc(S(id).concentra)}</span>` : ''}${cd == null && atq == null ? `<span class="tenue" style="font-size:14px">${dm ? 'Falta la CD y el ataque de conjuro: ponlos en «Editar ficha».' : 'El DM aún no anota tu CD de conjuros.'}</span>` : ''}</div>
+    ${libro.length ? Object.keys(grupos).sort((a, b) => a - b).map((n) => `<p class="sub" style="margin-top:12px">${+n ? `Nivel ${n}` : 'Trucos (sin gastar espacios)'}</p>${grupos[n].map(([cid, c]) => htmlConjuro(id, cid, c, dm)).join('')}`).join('')
+      : `<p class="tenue" style="margin:0;font-size:15px">${dm ? 'Todavía no tiene conjuros en su libro.' : 'Tu libro está vacío. El DM te irá dando conjuros a medida que avance la historia.'}</p>`}
+    ${C().activo && libro.some(([, c]) => !c.cura && (c.tirada || c.dano)) ? '<p class="tenue" style="margin:10px 0 0;font-size:14px">En combate, los conjuros contra enemigos también están en el panel Atacar: al enviarlos al DM se gasta el espacio.</p>' : ''}
+    ${legado.length ? `<p class="sub" style="margin-top:14px">Anotados en la ficha</p>${legado.map((c) => `<div class="conjuro"><b>${esc(c.nombre)}</b>${c.texto ? `<p>${esc(c.texto)}</p>` : ''}</div>`).join('')}` : ''}
+    ${dm ? htmlDarConjuro(id) : ''}
+  </section>`;
 }
 
 function vistaHoja(id) {
@@ -560,11 +696,7 @@ function vistaHoja(id) {
         ${C().activo ? '<p class="tenue" style="margin:8px 0 0;font-size:14px">Lo que tires aquí queda listo en el panel Atacar para enviárselo al DM.</p>' : ''}
       </section>` : ''}
 
-      ${((f.trucos || []).length || (f.conjuros || []).length) ? `<section class="panel">
-        <h2 class="panel-titulo">Conjuros</h2>
-        ${(f.trucos || []).length ? `<p class="sub">Trucos (ilimitados)</p>${f.trucos.map((c) => `<div class="conjuro"><b>${esc(c.nombre)}</b>${c.texto ? `<p>${esc(c.texto)}</p>` : ''}</div>`).join('')}` : ''}
-        ${Object.keys(conjPorNivel).sort((a, b) => a - b).map((n) => `<p class="sub" style="margin-top:12px">Nivel ${n}</p>${conjPorNivel[n].map((c) => `<div class="conjuro"><b>${esc(c.nombre)}</b>${c.texto ? `<p>${esc(c.texto)}</p>` : ''}</div>`).join('')}`).join('')}
-      </section>` : ''}
+      ${htmlLibro(id)}
     </div>
 
     <div class="columna">
@@ -614,8 +746,8 @@ const LISTAS = {
   salvaciones: { etq: 'Tiradas de salvación', ayuda: 'Una por línea: Nombre +bono', ej: 'Fuerza +4\nConstitución +4' },
   habilidades: { etq: 'Habilidades', ayuda: 'Una por línea: Nombre +bono', ej: 'Atletismo +4\nPercepción +2' },
   ataques: { etq: 'Ataques extra', ayuda: 'Las armas equipadas en el Inventario ya salen solas. Aquí van otros (conjuros de ataque, ataques especiales), una por línea: Nombre | bono | daño', ej: 'Rayo de fuego | +5 | 1d10 fuego' },
-  trucos: { etq: 'Trucos', ayuda: 'Uno por línea: Nombre: descripción', ej: 'Luz: Un objeto brilla como una antorcha.' },
-  conjuros: { etq: 'Conjuros', ayuda: 'Uno por línea: nivel | Nombre | descripción', ej: '1 | Curar heridas | Recupera 1d8 + mod PV al tocar.' },
+  trucos: { etq: 'Trucos (mejor usa el Libro de conjuros de la ficha)', ayuda: 'Uno por línea: Nombre: descripción', ej: 'Luz: Un objeto brilla como una antorcha.' },
+  conjuros: { etq: 'Conjuros (mejor usa el Libro de conjuros de la ficha)', ayuda: 'Uno por línea: nivel | Nombre | descripción', ej: '1 | Curar heridas | Recupera 1d8 + mod PV al tocar.' },
   rasgos: { etq: 'Rasgos', ayuda: 'Uno por línea: Nombre: descripción', ej: 'Visión en la oscuridad: Ves hasta 18 m sin luz.' },
   recursos: { etq: 'Recursos con usos', ayuda: 'Uno por línea: Nombre | máximo | recarga (corto, largo o ninguna) | detalle opcional', ej: 'Segundo aliento | 1 | corto | Recuperas 1d10 + nivel PV\nFlechas | 20 | ninguna' },
   equipo: { etq: 'Equipo base', ayuda: 'Uno por línea. Mejor usa el Inventario de la ficha: ahí las armas y armaduras calculan sus bonos.', ej: 'Cota de malla\nMochila de explorador' },
@@ -708,7 +840,7 @@ function vistaEditor() {
     <p class="sub">Espacios de conjuro por nivel <span class="tenue" style="font-family:var(--f-cuerpo);letter-spacing:0">(deja vacío si no tiene)</span></p>
     <div class="form-grid nueve">${Array.from({ length: 9 }, (_, i) => i + 1).map((n) => `<div><label class="etq" for="pj-esp-${n}">Nv ${n}</label><input class="campo num" id="pj-esp-${n}" type="number" min="0" max="9" inputmode="numeric" data-borrador value="${b('esp-' + n)}"></div>`).join('')}</div>
 
-    ${Object.entries(LISTAS).filter(([k]) => k !== 'equipo' || esDM()).map(([k, l]) => `<div class="lista-campo"><label class="etq" for="pj-${k}">${l.etq}</label><p class="ayuda">${esc(l.ayuda)}</p><textarea class="campo" id="pj-${k}" data-borrador placeholder="${esc(l.ej)}">${b(k)}</textarea></div>`).join('')}
+    ${Object.entries(LISTAS).filter(([k]) => !['equipo', 'trucos', 'conjuros'].includes(k) || esDM()).map(([k, l]) => `<div class="lista-campo"><label class="etq" for="pj-${k}">${l.etq}</label><p class="ayuda">${esc(l.ayuda)}</p><textarea class="campo" id="pj-${k}" data-borrador placeholder="${esc(l.ej)}">${b(k)}</textarea></div>`).join('')}
 
     <p class="sub">Quién es</p>
     <div class="form-grid dos">
@@ -1083,17 +1215,23 @@ const textoAccion = (x) => `${(presencia(x.objetivo) || {}).nombre || '¿?'} · 
 function htmlAccionesDM() {
   const l = accionesPend(); if (!l.length) return '';
   return `<div class="acciones-dm"><p class="sub" style="margin-top:0">Ataques de los jugadores</p>${l.map(([k, x]) => {
-    const p = presencia(x.objetivo); const s = sugerencia(x, p);
-    const golpe = x.golpe !== '' && x.golpe != null ? `${x.golpe} para golpear${x.nat ? ` (d20: ${x.nat})` : ''}` : 'sin tirada para golpear';
+    const p = presencia(x.objetivo);
+    const sv = x.salva ? String(ui.borradores['sv-' + k] || '').split('|') : null;
+    const s = !x.salva ? sugerencia(x, p) : !sv[0] ? { clase: '', texto: `Tira su salvación de ${NOMBRE_SALVA[x.salva.attr] || x.salva.attr} contra CD ${x.salva.cd}` }
+      : +sv[0] >= +x.salva.cd ? { clase: 'no', texto: `Supera (${sv[0]}): ${x.salva.mitad ? 'recibe la mitad' : 'no le pasa nada'}` } : { clase: 'si', texto: `Falla (${sv[0]}): recibe todo el daño` };
+    const golpe = x.salva ? `salvación de ${NOMBRE_SALVA[x.salva.attr] || x.salva.attr} CD ${x.salva.cd}${x.salva.mitad ? ' (mitad si supera)' : ''}` : x.golpe !== '' && x.golpe != null ? `${x.golpe} para golpear${x.nat ? ` (d20: ${x.nat})` : ''}` : 'sin tirada para golpear';
     const dano = x.dano !== '' && x.dano != null ? `${x.dano} de daño${x.tipoDano ? ' ' + x.tipoDano : ''}${x.critico ? ' (crítico)' : ''}` : 'sin daño';
     return `<div class="accion ${s.clase}" style="--c:${F(x.de).color || 'var(--oro)'}">
       <div style="min-width:0;flex:1"><div><b>${esc(F(x.de).nombre || 'Jugador')}</b> → <b>${esc(p ? p.nombre : 'alguien que ya no está')}</b> · ${esc(x.ataque)}</div>
         <div class="recurso-det">${esc(golpe)} · ${esc(dano)}${p && +p.pvMax > 0 ? ` · le quedan ${pvPr(p)} PV` : ''}</div>
         <div class="accion-sug">${esc(s.texto)}</div></div>
       <div class="fila accion-botones">${p ? `<label class="sr" for="ad-${esc(k)}">Daño a aplicar</label><input class="campo num campo-cant" id="ad-${esc(k)}" type="number" min="0" inputmode="numeric" data-borrador value="${val('ad-' + k, x.dano)}">
-        <button type="button" class="btn btn-peq btn-oro" data-accion="acc-aplicar" data-k="${esc(k)}" data-f="1">Acierta</button>
+        ${x.salva ? `<button type="button" class="btn btn-peq" data-accion="acc-salva" data-k="${esc(k)}">Tirar su salvación</button>
+        <button type="button" class="btn btn-peq btn-oro" data-accion="acc-aplicar" data-k="${esc(k)}" data-f="1">Todo el daño</button>
+        <button type="button" class="btn btn-peq" data-accion="acc-aplicar" data-k="${esc(k)}" data-f="0.5">Mitad</button>
+        <button type="button" class="btn btn-peq btn-peligro" data-accion="acc-fallo" data-k="${esc(k)}">Sin daño</button>` : `<button type="button" class="btn btn-peq btn-oro" data-accion="acc-aplicar" data-k="${esc(k)}" data-f="1">Acierta</button>
         <button type="button" class="btn btn-peq" data-accion="acc-aplicar" data-k="${esc(k)}" data-f="0.5" title="Resistencia: la mitad del daño">Mitad</button>
-        <button type="button" class="btn btn-peq btn-peligro" data-accion="acc-fallo" data-k="${esc(k)}">Falla</button>` : `<button type="button" class="btn btn-peq" data-accion="acc-fallo" data-k="${esc(k)}">Descartar</button>`}</div>
+        <button type="button" class="btn btn-peq btn-peligro" data-accion="acc-fallo" data-k="${esc(k)}">Falla</button>`}` : `<button type="button" class="btn btn-peq" data-accion="acc-fallo" data-k="${esc(k)}">Descartar</button>`}</div>
     </div>`;
   }).join('')}</div>`;
 }
@@ -1103,14 +1241,16 @@ function htmlCombateJugador(id) {
   if (!C().activo) return '';
   const b = ui.borradores;
   const objetivos = porOrden(E.presencias).filter(([, p]) => !p.oculto && !p.derrotado);
-  const ataques = ataquesPj(id);
+  const ataques = ataquesPj(id, true);
   const sel = b['ja-atq'] ?? (ataques.length ? '0' : 'otro');
+  const elegido = sel === 'otro' ? null : ataques[+sel];
+  const multi = !!(elegido && elegido.salva);
   const modo = b['ja-modo'] || 'normal';
   const mias = accionesPend().filter(([, x]) => x.de === id);
   const compas = listaPj().filter(([oid]) => oid !== id && tienePv(oid));
   return `<section class="panel ancho combate-jugador">
     <h2 class="panel-titulo">${icono('espadas')} Atacar</h2>
-    ${objetivos.length ? `<div><label class="etq" for="ja-obj">A quién</label><select class="campo" style="width:100%" id="ja-obj" data-borrador>${objetivos.map(([k, p]) => `<option value="${esc(k)}"${b['ja-obj'] === k ? ' selected' : ''}>${esc(p.nombre)}</option>`).join('')}</select></div>
+    ${objetivos.length ? `${multi ? `<div><span class="etq">A quiénes alcanza (cada uno hace su salvación)</span><div class="multi-obj">${objetivos.map(([k, p]) => `<label class="check"><input type="checkbox" id="jm-${esc(k)}" data-borrador-check${b['jm-' + k] ?? (b['ja-obj'] ? b['ja-obj'] === k : false) ? ' checked' : ''}> ${esc(p.nombre)}</label>`).join('')}</div></div>` : `<div><label class="etq" for="ja-obj">A quién</label><select class="campo" style="width:100%" id="ja-obj" data-borrador>${objetivos.map(([k, p]) => `<option value="${esc(k)}"${b['ja-obj'] === k ? ' selected' : ''}>${esc(p.nombre)}</option>`).join('')}</select></div>`}
     <p class="etq" style="margin:12px 0 4px">Con qué <span class="tenue" style="font-family:var(--f-cuerpo);letter-spacing:0">(toca el nombre para elegirlo, o tira directo)</span></p>
     <div class="seg seg-peq" role="group" aria-label="Modo de la tirada">${[['normal', 'Normal'], ['ventaja', 'Ventaja'], ['desventaja', 'Desventaja']].map(([k, t]) => `<button type="button" aria-pressed="${modo === k}" data-accion="ja-modo" data-m="${k}">${t}</button>`).join('')}</div>
     ${htmlListaAtaques(id, true)}
@@ -2079,7 +2219,7 @@ const ACCIONES = {
   'ja-tirar-golpe'(d) {
     const b = ui.borradores; const id = d.id || ui.ver;
     if (d.i != null && b['ja-atq'] !== String(d.i)) { b['ja-atq'] = String(d.i); for (const k of ['ja-dano', 'ja-crit', 'ja-detalle']) delete b[k]; }
-    const a = ataquesPj(id)[+(b['ja-atq'] ?? 0)]; const bono = a ? bonoNum(a.bono) : null; if (bono == null) return;
+    const a = ataquesPj(id, true)[+(b['ja-atq'] ?? 0)]; const bono = a ? bonoNum(a.bono) : null; if (bono == null) return;
     const modo = b['ja-modo'] || 'normal'; const r = tirarD20(modo); const total = r.nat + bono;
     b['ja-golpe'] = String(total); b['ja-nat'] = r.nat;
     if (r.nat === 20) b['ja-crit'] = true; else delete b['ja-crit'];
@@ -2089,7 +2229,7 @@ const ACCIONES = {
   'ja-tirar-dano'(d) {
     const b = ui.borradores; const id = d.id || ui.ver;
     if (d.i != null && b['ja-atq'] !== String(d.i)) { b['ja-atq'] = String(d.i); for (const k of ['ja-golpe', 'ja-nat', 'ja-crit', 'ja-detalle']) delete b[k]; }
-    const a = ataquesPj(id)[+(b['ja-atq'] ?? 0)]; if (!a) return;
+    const a = ataquesPj(id, true)[+(b['ja-atq'] ?? 0)]; if (!a) return;
     const crit = !!d.crit || !!b['ja-crit']; const r = tirarExpr(a.dano, crit); if (!r) return;
     b['ja-dano'] = String(r.total); if (crit) b['ja-crit'] = true;
     const previo = b['ja-detalle'] && b['ja-detalle'].startsWith(a.nombre + ':') ? b['ja-detalle'].replace(/ · Daño .*$/, '') : `${a.nombre}:`;
@@ -2098,18 +2238,121 @@ const ACCIONES = {
   },
   'ja-enviar'(d) {
     const b = ui.borradores; const f = F(d.id);
-    const objetivo = ($('#ja-obj') || {}).value || '';
-    if (!presencia(objetivo)) { aviso('Elige a quién atacas'); return; }
-    const sel = b['ja-atq'] ?? (ataquesPj(d.id).length ? '0' : 'otro');
-    const a = sel === 'otro' ? null : ataquesPj(d.id)[+sel];
+    const sel = b['ja-atq'] ?? (ataquesPj(d.id, true).length ? '0' : 'otro');
+    const a = sel === 'otro' ? null : ataquesPj(d.id, true)[+sel];
+    let objetivos;
+    if (a && a.salva) objetivos = porOrden(E.presencias).filter(([k, p]) => !p.oculto && !p.derrotado && ($('#jm-' + k) || {}).checked).map(([k]) => k);
+    else { const o = ($('#ja-obj') || {}).value || ''; objetivos = presencia(o) ? [o] : []; }
+    if (!objetivos.length) { aviso(a && a.salva ? 'Marca a quiénes alcanza' : 'Elige a quién atacas'); return; }
     const nombreAtq = a ? a.nombre : (($('#ja-otro') || {}).value || '').trim() || 'Ataque';
     const golpe = parseInt(($('#ja-golpe') || {}).value, 10); const dano = parseInt(($('#ja-dano') || {}).value, 10);
-    if (!Number.isFinite(golpe) && !Number.isFinite(dano)) { aviso('Escribe tu tirada para golpear o el daño'); $('#ja-golpe').focus(); return; }
+    if (!Number.isFinite(golpe) && !Number.isFinite(dano) && !(a && a.salva)) { aviso('Escribe tu tirada para golpear o el daño'); $('#ja-golpe').focus(); return; }
     const critico = !!(($('#ja-crit') || {}).checked);
     const nat = b['ja-nat'] ? +b['ja-nat'] : critico ? 20 : '';
-    sync.escribir({ [`combate/acciones/${nuevoId('a')}`]: { ts: Date.now(), de: d.id, objetivo, ataque: nombreAtq, golpe: Number.isFinite(golpe) ? golpe : '', nat, dano: Number.isFinite(dano) ? dano : '', tipoDano: a ? tipoDeDano(a.dano) : '', critico } });
+    const u = {};
+    // Un conjuro con nivel gasta su espacio al enviarse; si es de concentración, la reemplaza
+    if (a && a.conjuro) {
+      const c = (S(d.id).libro || {})[a.conjuro] || {};
+      if (a.nivel) {
+        const n = a.nivelEsp; if (espDe(d.id, n) <= 0) { aviso(`No te quedan espacios de nivel ${n}`); return; }
+        u[`personajes/${d.id}/estado/espacios/n${n}`] = espDe(d.id, n) - 1;
+      }
+      if (c.conc) u[`personajes/${d.id}/estado/concentra`] = c.nombre;
+    }
+    objetivos.forEach((obj, i) => {
+      u[`combate/acciones/${nuevoId('a')}${i}`] = { ts: Date.now() + i, de: d.id, objetivo: obj, ataque: nombreAtq, golpe: Number.isFinite(golpe) ? golpe : '', nat, dano: Number.isFinite(dano) ? dano : '', tipoDano: a ? tipoDeDano(a.dano) : '', critico, ...(a && a.salva ? { salva: a.salva } : {}), ...(a && a.conjuro ? { conjuro: true } : {}) };
+    });
+    sync.escribir(u);
     for (const k of ['ja-golpe', 'ja-dano', 'ja-crit', 'ja-nat', 'ja-detalle', 'ja-otro']) delete b[k];
-    aviso('Enviado al DM');
+    for (const k of Object.keys(b)) if (k.startsWith('jm-')) delete b[k];
+    aviso(a && a.conjuro && a.nivel ? `Enviado al DM · gastaste un espacio de nivel ${a.nivelEsp}` : 'Enviado al DM');
+  },
+  /* libro de conjuros */
+  'cj-lanzar'(d) {
+    const c = (S(d.id).libro || {})[d.c]; if (!c) return;
+    const b = ui.borradores; const n = nivelConj(d.id, d.c, c);
+    const contraEnemigos = !c.cura && (c.tirada || c.dano);
+    if (C().activo && contraEnemigos) {
+      // En combate se lanza desde el panel Atacar: el espacio se gasta al enviarlo al DM
+      const i = ataquesPj(d.id, true).findIndex((x) => x.conjuro === d.c);
+      if (i >= 0) { b['ja-atq'] = String(i); for (const k of ['ja-golpe', 'ja-dano', 'ja-crit', 'ja-nat', 'ja-detalle']) delete b[k]; }
+      requestAnimationFrame(() => { const p = $('.combate-jugador'); if (p) p.scrollIntoView({ block: 'start', behavior: 'smooth' }); });
+      aviso('Elige a quién en el panel Atacar y envíalo al DM');
+      return;
+    }
+    const u = {}; const partes = [];
+    if (c.nivel) {
+      if (espDe(d.id, n) <= 0) { aviso(`No te quedan espacios de nivel ${n}`); return; }
+      u[`personajes/${d.id}/estado/espacios/n${n}`] = espDe(d.id, n) - 1; partes.push(`espacio de nivel ${n}`);
+    }
+    const previa = S(d.id).concentra;
+    if (c.conc) { u[`personajes/${d.id}/estado/concentra`] = c.nombre; if (previa && previa !== c.nombre) partes.push(`dejas de concentrarte en ${previa}`); }
+    const expr = exprConj(d.id, c, n); let res = '';
+    if (expr) { const r = tirarExpr(expr); if (r) { res = `${c.cura ? 'Curación' : 'Daño'}: ${r.total}`; b['ja-detalle'] = `${c.nombre}: ${r.detalle} = ${r.total}`; if (c.cura && C().activo) { b['ja-cura-cant'] = String(r.total); ui.abiertos.add('cura'); } } }
+    if (Object.keys(u).length) sync.escribir(u);
+    aviso(`Lanzas ${c.nombre}${partes.length ? ` (${partes.join(', ')})` : ''}${res ? ` · ${res}` : ''}`);
+  },
+  'cj-atacar'(d) {
+    const i = ataquesPj(d.id, true).findIndex((x) => x.conjuro === d.c); if (i < 0) return;
+    ACCIONES['ja-tirar-golpe']({ id: d.id, i: String(i) });
+  },
+  'cj-tirar'(d) {
+    const c = (S(d.id).libro || {})[d.c]; if (!c) return;
+    const i = ataquesPj(d.id, true).findIndex((x) => x.conjuro === d.c);
+    if (i >= 0 && C().activo) { ACCIONES['ja-tirar-dano']({ id: d.id, i: String(i) }); return; }
+    const r = tirarExpr(exprConj(d.id, c, nivelConj(d.id, d.c, c))); if (!r) return;
+    ui.borradores['ja-detalle'] = `${c.nombre}: ${r.detalle} = ${r.total}`;
+    if (c.cura && C().activo) { ui.borradores['ja-cura-cant'] = String(r.total); ui.abiertos.add('cura'); }
+    aviso(`${c.nombre}: ${r.total}${c.cura ? ' de curación' : ' de daño'}`);
+  },
+  'cj-dar'(d) {
+    if (!esDM()) return;
+    const c = (catalogoConj || []).find((x) => x.nombre === d.n); if (!c) return;
+    const { clases, ...copia } = c;
+    escribirEstado(d.id, `libro/${nuevoId('cj')}`, { ...copia, orden: Date.now() });
+    aviso(`${F(d.id).nombre} aprende ${c.nombre}`);
+  },
+  'cj-propio'(d) {
+    if (!esDM()) return;
+    const b = ui.borradores; const g = (k) => String(b[k] ?? '').trim();
+    const nombre = g('cjp-nombre'); if (!nombre) { aviso('Ponle nombre al conjuro'); $('#cjp-nombre').focus(); return; }
+    const [tiempo = '', alcance = '', duracion = ''] = g('cjp-meta').split('·').map((x) => x.trim());
+    const nivel = Math.max(0, Math.min(9, parseInt(g('cjp-nivel'), 10) || 0));
+    escribirEstado(d.id, `libro/${nuevoId('cj')}`, { nombre, nivel, escuela: 'Propio', ritual: false, tiempo, alcance, componentes: '', duracion, conc: !!b['cjp-conc'], texto: g('cjp-texto'), mejora: '', tirada: g('cjp-tirada'), salva: g('cjp-salva') || 'DES', dano: g('cjp-dano'), tipo: g('cjp-tipo'), cura: '', sumaMod: false, masNivel: '', mitad: false, propio: true, orden: Date.now() });
+    for (const k of Object.keys(b)) if (k.startsWith('cjp-')) delete b[k];
+    aviso(`${F(d.id).nombre} aprende ${nombre}`);
+  },
+  'cj-ajustar'(d) {
+    if (!esDM()) return;
+    const c = (S(d.id).libro || {})[d.c]; if (!c) return;
+    const v = (k) => (($(`#cja-${k}-${d.c}`) || {}).value || '').trim(); const ch = (k) => !!(($(`#cja-${k}-${d.c}`) || {}).checked);
+    const dados = v('dano');
+    escribirEstado(d.id, `libro/${d.c}`, { ...c, tirada: v('tir'), salva: v('sal') || 'DES', ...(c.cura ? { cura: dados } : { dano: dados }), tipo: v('tipo'), masNivel: v('mas'), mitad: ch('mitad'), sumaMod: ch('mod') });
+    aviso('Conjuro ajustado');
+  },
+  'cj-quitar'(d) { if (!esDM()) return; ui.confirmar = null; const c = (S(d.id).libro || {})[d.c]; escribirEstado(d.id, `libro/${d.c}`, null); if (c) aviso(`${c.nombre} salió del libro`); },
+  'cj-migrar'(d) {
+    if (!esDM() || !catalogoConj) return;
+    const f = F(d.id); const u = {}; const hechos = []; let i = 0;
+    const tiene = new Set(libroDe(d.id).map(([, c]) => norm(c.nombre)));
+    for (const x of [...(f.trucos || []).map((c) => ({ ...c, nivel: 0 })), ...(f.conjuros || [])]) {
+      if (!x || !x.nombre || tiene.has(norm(x.nombre))) continue;
+      const c = catalogoConj.find((y) => norm(y.nombre) === norm(x.nombre));
+      let copia;
+      if (c) { const { clases, ...resto } = c; copia = resto; } else copia = { nombre: x.nombre, nivel: +x.nivel || 0, escuela: 'Propio', ritual: false, tiempo: '', alcance: '', componentes: '', duracion: '', conc: false, texto: x.texto || '', mejora: '', tirada: '', salva: 'DES', dano: '', tipo: '', cura: '', sumaMod: false, masNivel: '', mitad: false, propio: true };
+      u[`personajes/${d.id}/estado/libro/${nuevoId('cj')}${i++}`] = { ...copia, orden: Date.now() + i };
+      hechos.push(x.nombre + (c ? '' : ' (propio)'));
+    }
+    u[`personajes/${d.id}/ficha/trucos`] = []; u[`personajes/${d.id}/ficha/conjuros`] = [];
+    sync.escribir(u); aviso(hechos.length ? `Al libro: ${hechos.join(', ')}` : 'Ya estaban en el libro');
+  },
+  'acc-salva'(d) {
+    const x = (C().acciones || {})[d.k]; if (!x || !x.salva) return;
+    const p = presencia(x.objetivo); const t = plantillaDe(p) || {};
+    const v = (t.atributos || {})[x.salva.attr]; const m = v === '' || v == null ? 0 : Math.floor((+v - 10) / 2);
+    const r = tirarD20(); const total = r.nat + m;
+    ui.borradores['sv-' + d.k] = `${total}|${r.nat}|${m}`;
+    registrar(`${p ? p.nombre : '¿?'} · salvación de ${NOMBRE_SALVA[x.salva.attr]}: ${total}`, `d20 [${r.nat}] ${m >= 0 ? '+' : '−'} ${Math.abs(m)} contra CD ${x.salva.cd}`);
   },
   'inv-clase'(d) { ui.borradores['inv-clase'] = d.c; },
   'inv-anadir'(d) {
@@ -2199,8 +2442,8 @@ if (!esDM()) return;
     u[`presencias/${x.objetivo}/dano`] = dano;
     const cae = +p.pvMax > 0 && +p.pvMax - dano <= 0;
     if (cae) u[`presencias/${x.objetivo}/derrotado`] = true;
-    anotar(u, `${quien} golpea a ${p.nombre}${x.critico ? ' con un crítico' : ''}${cae ? ` y ${p.nombre} cae` : ''}`);
-    delete ui.borradores['ad-' + d.k];
+    anotar(u, `${x.conjuro || x.salva ? `${x.ataque} de ${quien} alcanza a ${p.nombre}` : `${quien} golpea a ${p.nombre}`}${x.critico ? ' con un crítico' : ''}${cae ? ` y ${p.nombre} cae` : ''}`);
+    delete ui.borradores['ad-' + d.k]; delete ui.borradores['sv-' + d.k];
     sync.escribir(u);
     aviso(cae ? `${p.nombre} cae` : +p.pvMax > 0 ? `${p.nombre}: −${n} PV → ${Math.max(0, +p.pvMax - dano)}/${p.pvMax}` : `${p.nombre}: +${n} de daño`);
   },
@@ -2208,8 +2451,8 @@ if (!esDM()) return;
     const x = (C().acciones || {})[d.k]; if (!x) return;
     const p = presencia(x.objetivo);
     const u = { [`combate/acciones/${d.k}`]: null };
-    if (p) anotar(u, `${F(x.de).nombre || 'Alguien'} falla contra ${p.nombre}`);
-    delete ui.borradores['ad-' + d.k];
+    if (p) anotar(u, x.salva ? `${p.nombre} resiste ${x.ataque} de ${F(x.de).nombre || 'alguien'}` : `${F(x.de).nombre || 'Alguien'} falla contra ${p.nombre}`);
+    delete ui.borradores['ad-' + d.k]; delete ui.borradores['sv-' + d.k];
     sync.escribir(u);
   },
   'tir-aplicar'(d) {
@@ -2451,6 +2694,7 @@ async function importarBanco(file) {
 const CAMBIOS = {
   'ent-cat'() { render(); },
   redibujar() { render(); },
+  'nivel-conj'(t) { ui.borradores['lz-' + t.dataset.c] = t.value; for (const k of ['ja-dano', 'ja-detalle']) delete ui.borradores[k]; render(); },
   moneda(t) { if (!esDM()) return; const v = Math.max(0, parseInt(t.value, 10) || 0); const u = { [`personajes/${t.dataset.id}/estado/monedas/${t.dataset.k}`]: v }; if (t.dataset.k === 'po') u[`personajes/${t.dataset.id}/estado/oro`] = v; sync.escribir(u); },
   ini(t) { const v = parseInt(t.value, 10); sync.escribir({ [`combate/participantes/${t.dataset.pid}/ini`]: Number.isFinite(v) ? v : '' }); },
   'ent-grupo-form'(t) { ui.borradores['ent-grupo'] = t.value; render(); if (t.value === '__nuevo') { const el = $('#ent-grupo-nuevo'); if (el) el.focus(); } },
