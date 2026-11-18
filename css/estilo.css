@@ -690,3 +690,5 @@ body.tv .registro li { font-size: 19px; }
 .atq.elegido { box-shadow: inset 0 0 0 1px var(--oro); background: rgba(201, 162, 74, .1); }
 .atq.elegido .atq-elegir::before { content: "● "; color: var(--oro); }
 @media (max-width: 420px) { .monedas { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.moneda-etq { font-family: var(--f-etiqueta); font-size: 12px; letter-spacing: .04em; color: var(--tenue); }
+.moneda-val { display: block; text-align: center; padding: 6px 4px; font-size: 16px; }

@@ -28,7 +28,7 @@ Dirección de la app: https://savilanbr-byte.github.io/d-d/
 
 ## Inventario y equipo
 
-- En **Mi personaje → Inventario**: monedas (cobre, plata, electro, oro y platino), lo **equipado** y la **mochila**, con cantidades.
+- En **Mi personaje → Inventario**: solo el DM lo modifica (desde DM → Personajes → Ver ficha); el jugador lo consulta. Monedas (cobre, plata, electro, oro y platino), lo **equipado** y la **mochila**, con cantidades.
 - **Añadir al inventario:** armas y armaduras del SRD 5.2.1 (con nombre propio, bono mágico y daño extra opcionales), escudos y otros objetos (con bono a la CA si lo dan).
 - **Las armas equipadas** salen solas en **Ataques** con su bono y daño calculados: FUE para cuerpo a cuerpo, DES a distancia, el mayor si es sutil, más la competencia si la tiene (la app la propone según la clase y se puede cambiar) y el bono mágico. Las versátiles agregan la línea a dos manos y las arrojadizas la línea lanzada.
 - **La CA** se calcula con la armadura, el escudo y los objetos equipados (solo una armadura y un escudo a la vez). Sin nada equipado se usa la CA escrita en la ficha. «CA sin armadura» en el editor sirve para clases que la cambian.
