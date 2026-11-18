@@ -672,3 +672,21 @@ body.tv .registro li { font-size: 19px; }
 .tiradas .aplicar { gap: 6px; margin-top: 6px; }
 .tiradas .aplicar select { flex: 1; min-width: 0; }
 .tiradas small.aplicado { color: var(--oro-claro); }
+
+/* ---------- Inventario y ataques del personaje ---------- */
+.monedas { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.moneda { display: grid; gap: 2px; text-align: center; }
+.moneda label { font-family: var(--f-etiqueta); font-size: 12px; letter-spacing: .04em; color: var(--tenue); }
+.moneda .campo { text-align: center; padding: 6px 4px; font-size: 16px; width: 100%; }
+.moneda.m-po .campo { border-color: rgba(232, 172, 62, .7); }
+.moneda.m-pp .campo { border-color: rgba(200, 205, 220, .5); }
+.moneda.m-pc .campo { border-color: rgba(190, 110, 70, .55); }
+.moneda.m-ppt .campo { border-color: rgba(220, 230, 240, .7); }
+.lista.objetos li.obj { align-items: center; flex-wrap: wrap; }
+.inv-anadir .form-grid { gap: 8px; }
+.atq-det { display: block; font-size: 13px; color: var(--tenue); margin-top: 1px; }
+.atq-elegir { border: 0; background: none; padding: 0; text-align: left; font: inherit; cursor: pointer; }
+.atq-elegir::before { content: "○ "; color: var(--tenue); }
+.atq.elegido { box-shadow: inset 0 0 0 1px var(--oro); background: rgba(201, 162, 74, .1); }
+.atq.elegido .atq-elegir::before { content: "● "; color: var(--oro); }
+@media (max-width: 420px) { .monedas { grid-template-columns: repeat(3, minmax(0, 1fr)); } }

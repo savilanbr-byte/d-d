@@ -26,6 +26,15 @@ Dirección de la app: https://savilanbr-byte.github.io/d-d/
 | **DM → Reglas** | Las reglas del DM del SRD 5.2.1 (herramientas del juego, objetos mágicos, monstruos y animales). Su buscador encuentra también las reglas de jugador. |
 | **DM → Ajustes** | Nombre de la campaña, PIN del DM, PINs de los personajes y borrar la campaña. |
 
+## Inventario y equipo
+
+- En **Mi personaje → Inventario**: monedas (cobre, plata, electro, oro y platino), lo **equipado** y la **mochila**, con cantidades.
+- **Añadir al inventario:** armas y armaduras del SRD 5.2.1 (con nombre propio, bono mágico y daño extra opcionales), escudos y otros objetos (con bono a la CA si lo dan).
+- **Las armas equipadas** salen solas en **Ataques** con su bono y daño calculados: FUE para cuerpo a cuerpo, DES a distancia, el mayor si es sutil, más la competencia si la tiene (la app la propone según la clase y se puede cambiar) y el bono mágico. Las versátiles agregan la línea a dos manos y las arrojadizas la línea lanzada.
+- **La CA** se calcula con la armadura, el escudo y los objetos equipados (solo una armadura y un escudo a la vez). Sin nada equipado se usa la CA escrita en la ficha. «CA sin armadura» en el editor sirve para clases que la cambian.
+- **Pasar al inventario** convierte el «Equipo base» de la ficha en objetos y reconoce las armas y armaduras del SRD.
+- Cada ataque tiene **Atacar**, **Daño** y **Crít.**; en combate, lo que se tira queda listo en el panel **Atacar** para enviárselo al DM.
+
 ## Combate compartido
 
 - **Jugadores:** durante un combate, su ficha muestra el panel **Atacar**. Eligen a quién y con qué ataque, escriben el total de sus dados físicos o pulsan **Tirar d20** y **Tirar daño** (normal, ventaja o desventaja; un 20 natural marca crítico y dobla los dados), y lo **envían al DM**. Pueden cancelar lo que aún no se revisa. También pueden **curar a un compañero**.
@@ -38,7 +47,7 @@ Dirección de la app: https://savilanbr-byte.github.io/d-d/
 | Lista | Una línea por elemento |
 |---|---|
 | Salvaciones y habilidades | `Atletismo +4` |
-| Ataques | `Espada larga \| +4 \| 1d8 + 2 cortante` |
+| Ataques extra (conjuros de ataque y otros; las armas equipadas salen solas) | `Rayo de fuego \| +5 \| 1d10 fuego` |
 | Trucos y rasgos | `Nombre: descripción` |
 | Conjuros | `1 \| Curar heridas \| descripción` (el primer número es el nivel) |
 | Recursos con usos | `Segundo aliento \| 1 \| corto \| detalle opcional` (recarga: corto, largo o ninguna) |
@@ -119,6 +128,7 @@ En **DM → Banco PNJ → Importar** se carga un archivo `.json` con este format
 | `js/datos.js` | Listas fijas y la campaña vacía |
 | `js/sync.js` | Sincronización en vivo (Firebase) o de demostración |
 | `js/app.js` | Vistas, creador de personajes y panel del DM |
+| `js/equipo.js` | Armas y armaduras del SRD 5.2.1 y competencias por clase |
 | `js/dados.js` | Tiradas de dados y salud aproximada de los PNJ |
 | `js/reglas.js` | Lector de reglas: índice, buscador y dibujo de tablas y perfiles |
 | `reglas/reglas-jugador.json`, `reglas/reglas-dm.json` | El SRD 5.2.1 en español convertido a capítulos y secciones |
